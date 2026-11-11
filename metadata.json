@@ -1,0 +1,6 @@
+{
+  "name": "Hybrid Unified TV Remote",
+  "description": "Native Kotlin Android architecture, connection managers, and interactive simulator for IR and Wi-Fi ADB Fire TV remote control.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
