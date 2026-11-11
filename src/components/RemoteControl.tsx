@@ -19,9 +19,11 @@ import {
   Home,
   Menu,
   Sparkles,
-  Zap,
-  Sliders,
-  Check
+  Search,
+  Keyboard,
+  Delete,
+  CornerDownLeft,
+  X
 } from 'lucide-react';
 
 interface RemoteControlProps {
@@ -37,6 +39,11 @@ interface RemoteControlProps {
   onDpadCommand: (keyCode: number, label: string) => void;
   onInjectText: (text: string) => void;
   onLaunchApp: (app: InstalledApp) => void;
+  onSearchKey: () => void;
+  onBackspace: () => void;
+  onEnterKey: () => void;
+  onSendPreset: (query: string) => void;
+  onKeyChar: (char: string) => void;
   onIrPower: () => void;
   onIrSource: () => void;
   onIrVolumeUp: () => void;
@@ -45,6 +52,14 @@ interface RemoteControlProps {
   onIrDigit: (digit: number) => void;
   onRefreshApps: () => void;
 }
+
+const SEARCH_PRESETS = [
+  '4K Movies',
+  'Netflix Originals',
+  'Top Music',
+  'Documentaries',
+  'Trending News'
+];
 
 export const RemoteControl: React.FC<RemoteControlProps> = ({
   remoteMode,
@@ -59,6 +74,11 @@ export const RemoteControl: React.FC<RemoteControlProps> = ({
   onDpadCommand,
   onInjectText,
   onLaunchApp,
+  onSearchKey,
+  onBackspace,
+  onEnterKey,
+  onSendPreset,
+  onKeyChar,
   onIrPower,
   onIrSource,
   onIrVolumeUp,
@@ -71,6 +91,7 @@ export const RemoteControl: React.FC<RemoteControlProps> = ({
   const [showIpConfig, setShowIpConfig] = useState(false);
   const [editingIp, setEditingIp] = useState(targetIp);
   const [isPressingLed, setIsPressingLed] = useState(false);
+  const [showVirtualKeyboard, setShowVirtualKeyboard] = useState(false);
 
   const triggerLedPulse = () => {
     setIsPressingLed(true);
@@ -88,6 +109,16 @@ export const RemoteControl: React.FC<RemoteControlProps> = ({
       onInjectText(inputText.trim());
       setInputText('');
     }
+  };
+
+  const handleVirtualKey = (char: string) => {
+    setInputText((prev) => prev + char);
+    onKeyChar(char);
+  };
+
+  const handleVirtualBackspace = () => {
+    setInputText((prev) => prev.slice(0, -1));
+    onBackspace();
   };
 
   return (
@@ -358,59 +389,192 @@ export const RemoteControl: React.FC<RemoteControlProps> = ({
             </button>
           </div>
 
-          {/* Navigation Row: Back, Home, Menu */}
-          <div className="w-full flex items-center justify-around px-4 my-3">
+          {/* Navigation Row: Back, Home, Search, Menu */}
+          <div className="w-full flex items-center justify-between px-2 my-3">
             <button
               onClick={() => onDpadCommand(4, 'BACK')}
               className="flex flex-col items-center group"
             >
-              <div className="w-12 h-12 rounded-full bg-slate-800 hover:bg-slate-700 active:scale-95 transition-all flex items-center justify-center border border-slate-700">
+              <div className="w-11 h-11 rounded-full bg-slate-800 hover:bg-slate-700 active:scale-95 transition-all flex items-center justify-center border border-slate-700">
                 <ArrowLeft className="w-4 h-4 text-slate-300 group-hover:text-white" />
               </div>
-              <span className="text-[10px] font-semibold text-slate-400 mt-1">BACK</span>
+              <span className="text-[9px] font-semibold text-slate-400 mt-1">BACK</span>
             </button>
 
             <button
               onClick={() => onDpadCommand(3, 'HOME')}
               className="flex flex-col items-center group"
             >
-              <div className="w-12 h-12 rounded-full bg-slate-800 hover:bg-slate-700 active:scale-95 transition-all flex items-center justify-center border border-slate-700">
+              <div className="w-11 h-11 rounded-full bg-slate-800 hover:bg-slate-700 active:scale-95 transition-all flex items-center justify-center border border-slate-700">
                 <Home className="w-4 h-4 text-sky-400 group-hover:text-sky-300" />
               </div>
-              <span className="text-[10px] font-semibold text-slate-400 mt-1">HOME</span>
+              <span className="text-[9px] font-semibold text-slate-400 mt-1">HOME</span>
+            </button>
+
+            <button
+              onClick={onSearchKey}
+              title="adb shell input keyevent 84 (SEARCH)"
+              className="flex flex-col items-center group"
+            >
+              <div className="w-11 h-11 rounded-full bg-sky-950/80 hover:bg-sky-900 border border-sky-500/50 active:scale-95 transition-all flex items-center justify-center shadow-md shadow-sky-950/40">
+                <Search className="w-4 h-4 text-sky-300 group-hover:text-white" />
+              </div>
+              <span className="text-[9px] font-bold text-sky-400 mt-1">SEARCH</span>
             </button>
 
             <button
               onClick={() => onDpadCommand(82, 'MENU')}
               className="flex flex-col items-center group"
             >
-              <div className="w-12 h-12 rounded-full bg-slate-800 hover:bg-slate-700 active:scale-95 transition-all flex items-center justify-center border border-slate-700">
+              <div className="w-11 h-11 rounded-full bg-slate-800 hover:bg-slate-700 active:scale-95 transition-all flex items-center justify-center border border-slate-700">
                 <Menu className="w-4 h-4 text-slate-300 group-hover:text-white" />
               </div>
-              <span className="text-[10px] font-semibold text-slate-400 mt-1">MENU</span>
+              <span className="text-[9px] font-semibold text-slate-400 mt-1">MENU</span>
             </button>
           </div>
 
-          {/* Persistent Floating Keyboard Input Field */}
-          <form
-            onSubmit={handleTextSubmit}
-            className="w-full bg-slate-900/90 rounded-2xl p-1.5 border border-slate-800 flex items-center gap-1.5 mb-3"
-          >
-            <input
-              type="text"
-              value={inputText}
-              onChange={(e) => setInputText(e.target.value)}
-              placeholder="Inject text: adb input text..."
-              className="flex-1 bg-transparent px-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none font-mono"
-            />
-            <button
-              type="submit"
-              className="px-3 py-1.5 rounded-xl bg-sky-600 hover:bg-sky-500 text-white text-xs font-semibold flex items-center gap-1 shrink-0 transition-all active:scale-95"
-            >
-              <Send className="w-3 h-3" />
-              <span>Inject</span>
-            </button>
-          </form>
+          {/* Quick Search Preset Chips */}
+          <div className="w-full flex items-center gap-1.5 overflow-x-auto pb-1 mb-2 scrollbar-none">
+            {SEARCH_PRESETS.map((preset) => (
+              <button
+                key={preset}
+                onClick={() => onSendPreset(preset)}
+                className="shrink-0 px-2 py-0.5 rounded-full bg-slate-900 hover:bg-slate-800 border border-slate-800 hover:border-sky-500/50 text-[10px] text-slate-300 font-medium transition-all"
+              >
+                {preset}
+              </button>
+            ))}
+          </div>
+
+          {/* Persistent Floating Keyboard & Search Input Field */}
+          <div className="w-full bg-slate-900/90 rounded-2xl p-1.5 border border-slate-800 flex flex-col gap-1.5 mb-2">
+            <form onSubmit={handleTextSubmit} className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={onSearchKey}
+                title="Activate TV Search Bar"
+                className="p-1.5 rounded-lg text-slate-400 hover:text-sky-300 transition-colors"
+              >
+                <Search className="w-3.5 h-3.5" />
+              </button>
+
+              <input
+                type="text"
+                value={inputText}
+                onChange={(e) => setInputText(e.target.value)}
+                placeholder="Type or search on TV..."
+                className="flex-1 bg-transparent px-2 py-1 text-xs text-white placeholder-slate-500 focus:outline-none font-mono"
+              />
+
+              {inputText && (
+                <button
+                  type="button"
+                  onClick={() => setInputText('')}
+                  className="p-1 rounded text-slate-500 hover:text-slate-300"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              )}
+
+              <button
+                type="button"
+                onClick={onBackspace}
+                title="adb keyevent 67 (DEL)"
+                className="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-slate-800 transition-colors"
+              >
+                <Delete className="w-3.5 h-3.5" />
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setShowVirtualKeyboard(!showVirtualKeyboard)}
+                title="Toggle Virtual Keyboard"
+                className={`p-1.5 rounded-lg transition-colors ${
+                  showVirtualKeyboard ? 'text-sky-400 bg-slate-800' : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <Keyboard className="w-3.5 h-3.5" />
+              </button>
+
+              <button
+                type="submit"
+                className="px-2.5 py-1.5 rounded-xl bg-sky-600 hover:bg-sky-500 text-white text-xs font-semibold flex items-center gap-1 shrink-0 transition-all active:scale-95"
+              >
+                <Send className="w-3 h-3" />
+                <span>Send</span>
+              </button>
+            </form>
+
+            {/* Expandable Virtual Touch Keyboard */}
+            {showVirtualKeyboard && (
+              <div className="pt-2 border-t border-slate-800/80 flex flex-col gap-1 items-center font-mono">
+                {/* Row 1 */}
+                <div className="flex gap-1 justify-center w-full">
+                  {'QWERTYUIOP'.split('').map((char) => (
+                    <button
+                      key={char}
+                      onClick={() => handleVirtualKey(char)}
+                      className="flex-1 h-7 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold active:scale-95 transition-all"
+                    >
+                      {char}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Row 2 */}
+                <div className="flex gap-1 justify-center w-[92%]">
+                  {'ASDFGHJKL'.split('').map((char) => (
+                    <button
+                      key={char}
+                      onClick={() => handleVirtualKey(char)}
+                      className="flex-1 h-7 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold active:scale-95 transition-all"
+                    >
+                      {char}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Row 3 */}
+                <div className="flex gap-1 justify-center w-[80%]">
+                  {'ZXCVBNM'.split('').map((char) => (
+                    <button
+                      key={char}
+                      onClick={() => handleVirtualKey(char)}
+                      className="flex-1 h-7 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold active:scale-95 transition-all"
+                    >
+                      {char}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Bottom Row: Backspace, Space, Enter */}
+                <div className="flex gap-1 w-full mt-1">
+                  <button
+                    onClick={handleVirtualBackspace}
+                    className="flex-1 h-7 rounded bg-rose-950/70 hover:bg-rose-900/80 text-rose-300 text-[10px] font-bold flex items-center justify-center gap-0.5"
+                  >
+                    <Delete className="w-3 h-3" />
+                    <span>DEL</span>
+                  </button>
+
+                  <button
+                    onClick={() => handleVirtualKey(' ')}
+                    className="flex-[2.5] h-7 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold"
+                  >
+                    SPACE
+                  </button>
+
+                  <button
+                    onClick={onEnterKey}
+                    className="flex-[1.5] h-7 rounded bg-sky-600 hover:bg-sky-500 text-white text-[10px] font-bold flex items-center justify-center gap-0.5 shadow-md shadow-sky-950/40"
+                  >
+                    <CornerDownLeft className="w-3 h-3" />
+                    <span>ENTER</span>
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       )}
 

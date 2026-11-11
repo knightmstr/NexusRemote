@@ -88,6 +88,7 @@ export default function App() {
   const [focusedTile, setFocusedTile] = useState(0);
   const [activeApp, setActiveApp] = useState<InstalledApp | null>(null);
   const [onScreenText, setOnScreenText] = useState('');
+  const [isSearchActive, setIsSearchActive] = useState(false);
   const [lastCommand, setLastCommand] = useState<string | null>('Ready (ADB Connected)');
 
   // Installed App Dock List
@@ -250,19 +251,83 @@ export default function App() {
       // HOME
       setActiveApp(null);
       setOnScreenText('');
+      setIsSearchActive(false);
       addLog('FireTvManager', 'I', 'Exited to Fire TV Home Launcher');
     } else if (keyCode === 4) {
       // BACK
       if (activeApp) {
         setActiveApp(null);
         addLog('FireTvManager', 'I', 'Exited active app activity');
-      } else if (onScreenText) {
+      } else if (isSearchActive || onScreenText) {
+        setIsSearchActive(false);
         setOnScreenText('');
+        addLog('FireTvManager', 'I', 'Exited TV search overlay');
       }
     } else if (keyCode === 82) {
       // MENU
       addLog('FireTvManager', 'I', 'Triggered context menu on TV screen');
     }
+  };
+
+  // Dedicated TV Search Activation
+  const handleSearchKey = () => {
+    if (connectionStatus !== 'CONNECTED') {
+      addLog('FireTvManager', 'W', `Cannot activate search: Device is ${connectionStatus}`);
+      return;
+    }
+    setActiveApp(null);
+    setIsSearchActive(true);
+    addLog('FireTvManager', 'D', 'ADB Shell TX: \'input keyevent 84\' (SEARCH)');
+    setLastCommand('ADB: input keyevent 84 (SEARCH)');
+  };
+
+  // Keyboard Backspace Action
+  const handleBackspace = () => {
+    if (connectionStatus !== 'CONNECTED') {
+      addLog('FireTvManager', 'W', `Cannot send backspace: Device is ${connectionStatus}`);
+      return;
+    }
+    setOnScreenText((prev) => prev.slice(0, -1));
+    addLog('FireTvManager', 'D', 'ADB Shell TX: \'input keyevent 67\' (DEL/BACKSPACE)');
+    setLastCommand('ADB: input keyevent 67 (DEL)');
+  };
+
+  // Keyboard Enter / Submit Search Action
+  const handleEnterKey = () => {
+    if (connectionStatus !== 'CONNECTED') {
+      addLog('FireTvManager', 'W', `Cannot send enter: Device is ${connectionStatus}`);
+      return;
+    }
+    addLog('FireTvManager', 'D', 'ADB Shell TX: \'input keyevent 66\' (ENTER/SEARCH)');
+    setLastCommand('ADB: input keyevent 66 (ENTER)');
+  };
+
+  // Quick Search Preset Query Injection
+  const handleSendPreset = (preset: string) => {
+    if (connectionStatus !== 'CONNECTED') {
+      addLog('FireTvManager', 'W', `Cannot send preset: Device is ${connectionStatus}`);
+      return;
+    }
+    setActiveApp(null);
+    setIsSearchActive(true);
+    setOnScreenText(preset);
+    const sanitized = preset.replace(/ /g, '%s');
+    addLog('FireTvManager', 'D', `ADB Shell TX: 'input text "${sanitized}"'`);
+    addLog('FireTvManager', 'D', 'ADB Shell TX: \'input keyevent 66\' (ENTER)');
+    setLastCommand(`ADB Search: "${preset}"`);
+  };
+
+  // Virtual Keyboard Character Typing
+  const handleKeyChar = (char: string) => {
+    if (connectionStatus !== 'CONNECTED') {
+      addLog('FireTvManager', 'W', `Cannot type character: Device is ${connectionStatus}`);
+      return;
+    }
+    setIsSearchActive(true);
+    setOnScreenText((prev) => prev + char);
+    const sanitized = char === ' ' ? '%s' : char;
+    addLog('FireTvManager', 'D', `ADB Shell TX: 'input text "${sanitized}"'`);
+    setLastCommand(`ADB Type: "${char}"`);
   };
 
   // Text Injection
@@ -272,6 +337,7 @@ export default function App() {
       return;
     }
 
+    setIsSearchActive(true);
     const sanitized = text.replace(/ /g, '%s');
     addLog('FireTvManager', 'D', `ADB Shell TX: 'input text "${sanitized}"'`);
     setOnScreenText((prev) => (prev ? `${prev} ${text}` : text));
@@ -434,6 +500,11 @@ export default function App() {
                 onDpadCommand={handleDpadCommand}
                 onInjectText={handleInjectText}
                 onLaunchApp={handleLaunchApp}
+                onSearchKey={handleSearchKey}
+                onBackspace={handleBackspace}
+                onEnterKey={handleEnterKey}
+                onSendPreset={handleSendPreset}
+                onKeyChar={handleKeyChar}
                 onIrPower={handleIrPower}
                 onIrSource={handleIrSource}
                 onIrVolumeUp={handleIrVolumeUp}
@@ -467,6 +538,7 @@ export default function App() {
                   focusedTile={focusedTile}
                   activeApp={activeApp}
                   onScreenText={onScreenText}
+                  isSearchActive={isSearchActive}
                   connectionStatus={connectionStatus}
                   lastCommand={lastCommand}
                   apps={apps}
@@ -480,6 +552,10 @@ export default function App() {
                       'I',
                       `Launched: ${apps[idx].packageName} via simulated click`
                     );
+                  }}
+                  onCloseSearch={() => {
+                    setIsSearchActive(false);
+                    setOnScreenText('');
                   }}
                 />
               </div>

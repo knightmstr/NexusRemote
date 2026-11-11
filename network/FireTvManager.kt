@@ -55,6 +55,11 @@ class FireTvManager(
         const val KEYCODE_MEDIA_PLAY_PAUSE = 85
         const val KEYCODE_MEDIA_REWIND = 89
         const val KEYCODE_MEDIA_FAST_FORWARD = 90
+        const val KEYCODE_SEARCH = 84
+        const val KEYCODE_ENTER = 66
+        const val KEYCODE_DEL = 67
+        const val KEYCODE_SPACE = 62
+        const val KEYCODE_CLEAR = 28
 
         // ADB Protocol Message Constants
         private const val A_SYNC = 0x434e5953 // "SYNC"
@@ -198,6 +203,45 @@ class FireTvManager(
             val sanitized = sanitizeTextForAdb(text)
             val command = "input text \"$sanitized\""
             executeAdbShellCommand(command)
+        }
+    }
+
+    /**
+     * Activates the search bar / search view on the Fire TV interface.
+     * Uses Android's KEYCODE_SEARCH (84).
+     */
+    fun openSearch() {
+        sendDpadCommand(KEYCODE_SEARCH)
+    }
+
+    /**
+     * Sends a backspace / delete character event to remove characters in active search fields.
+     */
+    fun sendBackspace() {
+        sendDpadCommand(KEYCODE_DEL)
+    }
+
+    /**
+     * Sends an Enter keyevent (66) to submit search queries or click Search in on-screen keyboards.
+     */
+    fun sendEnter() {
+        sendDpadCommand(KEYCODE_ENTER)
+    }
+
+    /**
+     * Injects a search term and immediately triggers Enter/Search execution.
+     * Ideal for quick search recommendations and full query injection.
+     */
+    fun sendSearchQuery(query: String) {
+        if (_connectionStatus.value != ConnectionStatus.CONNECTED) {
+            Log.w(TAG, "Cannot send search query: Device is not CONNECTED")
+            return
+        }
+
+        managerScope.launch {
+            val sanitized = sanitizeTextForAdb(query)
+            executeAdbShellCommand("input text \"$sanitized\"")
+            executeAdbShellCommand("input keyevent $KEYCODE_ENTER")
         }
     }
 

@@ -1,6 +1,6 @@
 import React from 'react';
 import { ConnectionStatus, InstalledApp } from '../types';
-import { Tv, ShieldAlert, Check, Search, Wifi, Volume2, VolumeX, AlertCircle } from 'lucide-react';
+import { Tv, ShieldAlert, Check, Search, Wifi, Volume2, VolumeX, Film, Play, Sparkles, X } from 'lucide-react';
 
 interface TvSimulatorProps {
   isPoweredOn: boolean;
@@ -10,13 +10,34 @@ interface TvSimulatorProps {
   focusedTile: number;
   activeApp: InstalledApp | null;
   onScreenText: string;
+  isSearchActive: boolean;
   connectionStatus: ConnectionStatus;
   lastCommand: string | null;
   apps: InstalledApp[];
   onAuthorizeAdb: () => void;
   onRejectAdb: () => void;
   onSelectTile: (tileIndex: number) => void;
+  onCloseSearch: () => void;
 }
+
+interface SearchResultItem {
+  id: string;
+  title: string;
+  year: string;
+  rating: string;
+  quality: string;
+  app: string;
+  color: string;
+}
+
+const SAMPLE_SEARCH_CATALOG: SearchResultItem[] = [
+  { id: '1', title: 'Interstellar', year: '2014', rating: '98% Match', quality: '4K UHD • HDR10', app: 'Prime Video', color: '#00A8E1' },
+  { id: '2', title: 'Stranger Things', year: '2025', rating: '96% Match', quality: '4K Dolby Vision', app: 'Netflix', color: '#E50914' },
+  { id: '3', title: 'The Mandalorian', year: '2024', rating: '94% Match', quality: '4K UHD • IMAX', app: 'Disney+', color: '#113CCF' },
+  { id: '4', title: 'Top Gun: Maverick', year: '2023', rating: '95% Match', quality: '4K UHD • Dolby Atmos', app: 'Prime Video', color: '#00A8E1' },
+  { id: '5', title: 'Cyberpunk Edgerunners', year: '2023', rating: '92% Match', quality: '1080p HD', app: 'Netflix', color: '#E50914' },
+  { id: '6', title: 'Formula 1: Drive to Survive', year: '2025', rating: '90% Match', quality: '4K UHD', app: 'Netflix', color: '#E50914' },
+];
 
 export const TvSimulator: React.FC<TvSimulatorProps> = ({
   isPoweredOn,
@@ -26,13 +47,24 @@ export const TvSimulator: React.FC<TvSimulatorProps> = ({
   focusedTile,
   activeApp,
   onScreenText,
+  isSearchActive,
   connectionStatus,
   lastCommand,
   apps,
   onAuthorizeAdb,
   onRejectAdb,
   onSelectTile,
+  onCloseSearch,
 }) => {
+  const filteredCatalog = SAMPLE_SEARCH_CATALOG.filter((item) =>
+    onScreenText
+      ? item.title.toLowerCase().includes(onScreenText.toLowerCase()) ||
+        item.app.toLowerCase().includes(onScreenText.toLowerCase()) ||
+        onScreenText.toLowerCase().includes('movie') ||
+        onScreenText.toLowerCase().includes('4k')
+      : true
+  );
+
   return (
     <div className="flex flex-col h-full bg-slate-950/80 rounded-2xl border border-slate-800 shadow-2xl overflow-hidden backdrop-blur-md">
       {/* TV Bezel Top Bar */}
@@ -85,7 +117,7 @@ export const TvSimulator: React.FC<TvSimulatorProps> = ({
       </div>
 
       {/* Main TV Display Screen */}
-      <div className="relative flex-1 bg-black overflow-hidden flex flex-col justify-between min-h-[340px]">
+      <div className="relative flex-1 bg-black overflow-hidden flex flex-col justify-between min-h-[350px]">
         {!isPoweredOn ? (
           // TV Screen Off State
           <div className="flex-1 flex flex-col items-center justify-center bg-zinc-950 text-slate-600">
@@ -109,23 +141,86 @@ export const TvSimulator: React.FC<TvSimulatorProps> = ({
               </div>
 
               {/* TV Search / Input Bar displaying Injected Text */}
-              <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-800/80 border border-slate-700 max-w-xs w-full">
-                <Search className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+              <div
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border transition-all max-w-sm w-full ${
+                  isSearchActive || onScreenText
+                    ? 'bg-slate-850 border-sky-400 ring-2 ring-sky-500/30 shadow-lg shadow-sky-500/10'
+                    : 'bg-slate-800/80 border-slate-700'
+                }`}
+              >
+                <Search className={`w-3.5 h-3.5 shrink-0 ${isSearchActive || onScreenText ? 'text-sky-400' : 'text-slate-400'}`} />
                 <div className="text-xs font-mono text-slate-200 truncate flex-1">
                   {onScreenText ? (
                     <span className="text-sky-300 font-semibold">{onScreenText}</span>
                   ) : (
-                    <span className="text-slate-500">Search movies, apps, shows...</span>
+                    <span className="text-slate-500">
+                      {isSearchActive ? 'Search query active: type on remote...' : 'Search movies, apps, shows...'}
+                    </span>
                   )}
                 </div>
-                {onScreenText && (
+                {(isSearchActive || onScreenText) && (
                   <span className="w-1.5 h-3.5 bg-sky-400 animate-pulse inline-block" />
+                )}
+                {onScreenText && (
+                  <button
+                    onClick={onCloseSearch}
+                    className="text-slate-400 hover:text-slate-200 p-0.5 rounded"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
                 )}
               </div>
             </div>
 
-            {/* If an App is currently launched */}
-            {activeApp ? (
+            {/* If Search is Active or Text has been Injected */}
+            {(isSearchActive || onScreenText) && !activeApp ? (
+              <div className="flex-1 flex flex-col justify-start overflow-hidden">
+                <div className="flex items-center justify-between text-xs font-bold text-slate-300 mb-2">
+                  <div className="flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                    <span>
+                      {onScreenText ? `Search Results for "${onScreenText}"` : 'Fire TV Global Universal Search'}
+                    </span>
+                  </div>
+                  <span className="text-[10px] text-slate-400 font-normal">
+                    Press <kbd className="px-1 py-0.2 bg-slate-800 rounded">BACK</kbd> on remote to return
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-3 gap-2.5 overflow-y-auto pr-1">
+                  {filteredCatalog.slice(0, 6).map((item) => (
+                    <div
+                      key={item.id}
+                      className="group p-2.5 rounded-xl bg-slate-900/90 border border-slate-800 hover:border-sky-400 hover:bg-slate-850 transition-all flex flex-col justify-between"
+                    >
+                      <div>
+                        <div className="flex items-center justify-between mb-1">
+                          <span
+                            className="text-[9px] font-bold px-1.5 py-0.2 rounded text-white"
+                            style={{ backgroundColor: item.color }}
+                          >
+                            {item.app}
+                          </span>
+                          <span className="text-[10px] text-emerald-400 font-medium font-mono">{item.rating}</span>
+                        </div>
+                        <h4 className="text-xs font-bold text-slate-100 truncate group-hover:text-sky-300">
+                          {item.title}
+                        </h4>
+                        <p className="text-[10px] text-slate-400 font-mono mt-0.5">{item.year} • {item.quality}</p>
+                      </div>
+
+                      <div className="mt-2 flex items-center justify-between text-[10px] text-sky-400 font-semibold pt-1 border-t border-slate-800">
+                        <span className="flex items-center gap-1">
+                          <Play className="w-2.5 h-2.5 fill-sky-400" /> Watch Now
+                        </span>
+                        <span className="text-slate-500">ADB intent</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : activeApp ? (
+              // If an App is currently launched
               <div className="flex-1 rounded-xl bg-slate-900/90 border border-slate-700/80 p-5 flex flex-col items-center justify-center relative overflow-hidden shadow-inner">
                 <div
                   className="w-16 h-16 rounded-2xl flex items-center justify-center text-white text-2xl font-black shadow-xl mb-3"

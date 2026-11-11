@@ -33,9 +33,11 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Backspace
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Keyboard
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.filled.KeyboardArrowRight
@@ -43,6 +45,7 @@ import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.PowerSettingsNew
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.SettingsInputHdmi
 import androidx.compose.material.icons.filled.VolumeDown
@@ -188,8 +191,17 @@ fun RemoteMainScreen(
                         WiFiGesturePanel(
                             connectionStatus = uiState.connectionStatus,
                             inputText = uiState.activeInputText,
+                            isKeyboardOpen = uiState.isVirtualKeyboardOpen,
+                            searchPresets = uiState.searchPresets,
                             onInputTextChange = { viewModel.setKeyboardInputText(it) },
                             onSubmitText = { viewModel.submitKeyboardInput() },
+                            onSearch = { viewModel.openTvSearch() },
+                            onSendPreset = { viewModel.sendSearchQuery(it) },
+                            onBackspace = { viewModel.sendBackspace() },
+                            onEnter = { viewModel.sendEnter() },
+                            onClearText = { viewModel.clearKeyboardInput() },
+                            onToggleKeyboard = { viewModel.toggleVirtualKeyboard() },
+                            onKeyChar = { viewModel.appendKeyboardCharacter(it) },
                             onDpad = { keyCode -> viewModel.sendDpadCommand(keyCode) },
                             onBack = { viewModel.sendDpadCommand(FireTvManager.KEYCODE_BACK) },
                             onHome = { viewModel.sendDpadCommand(FireTvManager.KEYCODE_HOME) },
@@ -618,14 +630,24 @@ private fun NumberAuxButton(label: String, onClick: () -> Unit) {
 /**
  * WI-FI (ADB) MODE PANEL:
  * Massive 5-way D-Pad gesture surface (Up, Down, Left, Right, Center Click),
- * Navigation buttons (Back, Home, Menu), and floating persistent Keyboard Input.
+ * Navigation buttons (Back, Home, Search, Menu), Quick Search presets,
+ * and a persistent floating Keyboard Input field with backspace, submit, and virtual keyboard.
  */
 @Composable
 private fun WiFiGesturePanel(
     connectionStatus: ConnectionStatus,
     inputText: String,
+    isKeyboardOpen: Boolean,
+    searchPresets: List<String>,
     onInputTextChange: (String) -> Unit,
     onSubmitText: () -> Unit,
+    onSearch: () -> Unit,
+    onSendPreset: (String) -> Unit,
+    onBackspace: () -> Unit,
+    onEnter: () -> Unit,
+    onClearText: () -> Unit,
+    onToggleKeyboard: () -> Unit,
+    onKeyChar: (String) -> Unit,
     onDpad: (Int) -> Unit,
     onBack: () -> Unit,
     onHome: () -> Unit,
@@ -736,9 +758,9 @@ private fun WiFiGesturePanel(
 
         Spacer(modifier = Modifier.height(20.dp))
 
-        // Navigation Row: Back, Home, Menu
+        // Navigation Row: Back, Home, Search, Menu
         Row(
-            modifier = Modifier.fillMaxWidth(0.9f),
+            modifier = Modifier.fillMaxWidth(0.95f),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -755,65 +777,267 @@ private fun WiFiGesturePanel(
             )
 
             NavActionButton(
+                icon = Icons.Default.Search,
+                label = "SEARCH",
+                onClick = onSearch
+            )
+
+            NavActionButton(
                 icon = Icons.Default.Menu,
                 label = "MENU",
                 onClick = onMenu
             )
         }
 
-        Spacer(modifier = Modifier.height(18.dp))
+        Spacer(modifier = Modifier.height(16.dp))
 
-        // Persistent Floating Keyboard Input Field
+        // Quick Search Chips Presets Row
+        LazyRow(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            contentPadding = PaddingValues(horizontal = 4.dp)
+        ) {
+            items(searchPresets) { preset ->
+                Surface(
+                    onClick = { onSendPreset(preset) },
+                    shape = RoundedCornerShape(12.dp),
+                    color = Color(0xFF1E2533),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF2E3A52))
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Search,
+                            contentDescription = null,
+                            tint = Color(0xFF60A5FA),
+                            modifier = Modifier.size(12.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = preset,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = Color(0xFFE2E8F0)
+                        )
+                    }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(10.dp))
+
+        // Persistent Floating Keyboard & Search Input Field
         Card(
             shape = RoundedCornerShape(18.dp),
             colors = CardDefaults.cardColors(containerColor = Color(0xFF181C26)),
             border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF2C3446)),
             modifier = Modifier.fillMaxWidth()
         ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                OutlinedTextField(
-                    value = inputText,
-                    onValueChange = onInputTextChange,
-                    placeholder = {
-                        Text("Search or inject text to TV...", fontSize = 13.sp, color = Color(0xFF6B7280))
-                    },
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
-                    keyboardActions = KeyboardActions(onSend = {
-                        onSubmitText()
-                        keyboardController?.hide()
-                    }),
-                    singleLine = true,
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = Color.White,
-                        unfocusedTextColor = Color.White,
-                        focusedBorderColor = Color(0xFF2563EB),
-                        unfocusedBorderColor = Color.Transparent
-                    ),
-                    modifier = Modifier.weight(1f)
-                )
-
-                Spacer(modifier = Modifier.width(6.dp))
-
-                IconButton(
-                    onClick = {
-                        onSubmitText()
-                        keyboardController?.hide()
-                    },
-                    modifier = Modifier
-                        .size(42.dp)
-                        .background(Color(0xFF2563EB), RoundedCornerShape(10.dp))
+            Column(modifier = Modifier.fillMaxWidth().padding(8.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Send,
-                        contentDescription = "Inject Text",
-                        tint = Color.White,
-                        modifier = Modifier.size(18.dp)
+                    IconButton(
+                        onClick = onSearch,
+                        modifier = Modifier.size(36.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Search,
+                            contentDescription = "Activate Search on TV",
+                            tint = Color(0xFF60A5FA),
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+
+                    OutlinedTextField(
+                        value = inputText,
+                        onValueChange = onInputTextChange,
+                        placeholder = {
+                            Text("Type or search on TV...", fontSize = 12.sp, color = Color(0xFF6B7280))
+                        },
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                        keyboardActions = KeyboardActions(onSearch = {
+                            onSubmitText()
+                            keyboardController?.hide()
+                        }),
+                        singleLine = true,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White,
+                            focusedBorderColor = Color(0xFF2563EB),
+                            unfocusedBorderColor = Color.Transparent
+                        ),
+                        modifier = Modifier.weight(1f)
                     )
+
+                    if (inputText.isNotEmpty()) {
+                        IconButton(
+                            onClick = onClearText,
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Clear,
+                                contentDescription = "Clear",
+                                tint = Color(0xFF94A3B8),
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                    }
+
+                    IconButton(
+                        onClick = onBackspace,
+                        modifier = Modifier.size(36.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Backspace,
+                            contentDescription = "Backspace on TV",
+                            tint = Color(0xFFF87171),
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+
+                    IconButton(
+                        onClick = onToggleKeyboard,
+                        modifier = Modifier.size(36.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Keyboard,
+                            contentDescription = "Virtual Keyboard",
+                            tint = if (isKeyboardOpen) Color(0xFF38BDF8) else Color(0xFF94A3B8),
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+
+                    IconButton(
+                        onClick = {
+                            onSubmitText()
+                            keyboardController?.hide()
+                        },
+                        modifier = Modifier
+                            .size(38.dp)
+                            .background(Color(0xFF2563EB), RoundedCornerShape(10.dp))
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Send,
+                            contentDescription = "Inject & Search",
+                            tint = Color.White,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                }
+
+                // Expandable Virtual Touch Keyboard Panel
+                AnimatedVisibility(visible = isKeyboardOpen) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 10.dp)
+                            .background(Color(0xFF11141C), RoundedCornerShape(12.dp))
+                            .padding(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        val row1 = listOf("Q", "W", "E", "R", "T", "Y", "U", "I", "O", "P")
+                        val row2 = listOf("A", "S", "D", "F", "G", "H", "J", "K", "L")
+                        val row3 = listOf("Z", "X", "C", "V", "B", "N", "M")
+
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            row1.forEach { char ->
+                                Surface(
+                                    onClick = { onKeyChar(char) },
+                                    shape = RoundedCornerShape(6.dp),
+                                    color = Color(0xFF1E2430),
+                                    modifier = Modifier.weight(1f).height(34.dp)
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Text(text = char, fontSize = 12.sp, color = Color.White, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                            }
+                        }
+
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            modifier = Modifier.fillMaxWidth(0.92f)
+                        ) {
+                            row2.forEach { char ->
+                                Surface(
+                                    onClick = { onKeyChar(char) },
+                                    shape = RoundedCornerShape(6.dp),
+                                    color = Color(0xFF1E2430),
+                                    modifier = Modifier.weight(1f).height(34.dp)
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Text(text = char, fontSize = 12.sp, color = Color.White, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                            }
+                        }
+
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            modifier = Modifier.fillMaxWidth(0.85f)
+                        ) {
+                            row3.forEach { char ->
+                                Surface(
+                                    onClick = { onKeyChar(char) },
+                                    shape = RoundedCornerShape(6.dp),
+                                    color = Color(0xFF1E2430),
+                                    modifier = Modifier.weight(1f).height(34.dp)
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Text(text = char, fontSize = 12.sp, color = Color.White, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                            }
+                        }
+
+                        // Bottom Actions: Spacebar, Backspace, Enter
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Surface(
+                                onClick = onBackspace,
+                                shape = RoundedCornerShape(8.dp),
+                                color = Color(0xFF2E2024),
+                                modifier = Modifier.weight(1f).height(36.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Text("⌫ DEL", fontSize = 11.sp, color = Color(0xFFF87171), fontWeight = FontWeight.Bold)
+                                }
+                            }
+
+                            Surface(
+                                onClick = { onKeyChar(" ") },
+                                shape = RoundedCornerShape(8.dp),
+                                color = Color(0xFF262E3D),
+                                modifier = Modifier.weight(2.5f).height(36.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Text("SPACE", fontSize = 11.sp, color = Color.White, fontWeight = FontWeight.Bold)
+                                }
+                            }
+
+                            Surface(
+                                onClick = onEnter,
+                                shape = RoundedCornerShape(8.dp),
+                                color = Color(0xFF1E3A8A),
+                                modifier = Modifier.weight(1.5f).height(36.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Text("⏎ ENTER", fontSize = 11.sp, color = Color(0xFF60A5FA), fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }

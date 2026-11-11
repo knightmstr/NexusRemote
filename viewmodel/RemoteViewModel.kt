@@ -43,6 +43,8 @@ data class RemoteUiState(
     val hasIrHardware: Boolean = false,
     val isConnecting: Boolean = false,
     val activeInputText: String = "",
+    val isVirtualKeyboardOpen: Boolean = false,
+    val searchPresets: List<String> = listOf("4K Movies", "Netflix Originals", "Top Music", "Documentaries", "Trending News"),
     val lastActionFeedback: String? = null
 )
 
@@ -73,6 +75,10 @@ class RemoteViewModel(
     // Staged keyboard text
     private val _currentKeyboardInput = MutableStateFlow("")
     val currentKeyboardInput: StateFlow<String> = _currentKeyboardInput.asStateFlow()
+
+    // Virtual Keyboard overlay toggle state
+    private val _isVirtualKeyboardOpen = MutableStateFlow(false)
+    val isVirtualKeyboardOpen: StateFlow<Boolean> = _isVirtualKeyboardOpen.asStateFlow()
 
     // Persistent Target IP from Preferences DataStore
     val savedTargetIp: StateFlow<String> = dataStore.data
@@ -106,8 +112,9 @@ class RemoteViewModel(
         savedTargetIp,
         fireTvManager.installedApps,
         _currentKeyboardInput,
+        _isVirtualKeyboardOpen,
         _lastActionFeedback
-    ) { mode, status, ip, dockList, keyboardText, feedback ->
+    ) { mode, status, ip, dockList, keyboardText, isKbdOpen, feedback ->
         RemoteUiState(
             remoteMode = mode,
             connectionStatus = status,
@@ -116,6 +123,7 @@ class RemoteViewModel(
             hasIrHardware = infraredManager.hasIrEmitter(),
             isConnecting = status == ConnectionStatus.CONNECTING,
             activeInputText = keyboardText,
+            isVirtualKeyboardOpen = isKbdOpen,
             lastActionFeedback = feedback
         )
     }.stateIn(
@@ -186,6 +194,43 @@ class RemoteViewModel(
 
     fun setKeyboardInputText(text: String) {
         _currentKeyboardInput.value = text
+    }
+
+    fun toggleVirtualKeyboard() {
+        _isVirtualKeyboardOpen.value = !_isVirtualKeyboardOpen.value
+    }
+
+    fun openTvSearch() {
+        fireTvManager.openSearch()
+        _lastActionFeedback.value = "Activated TV Search Field (KEYCODE_SEARCH)"
+    }
+
+    fun sendBackspace() {
+        fireTvManager.sendBackspace()
+        if (_currentKeyboardInput.value.isNotEmpty()) {
+            _currentKeyboardInput.value = _currentKeyboardInput.value.dropLast(1)
+        }
+        _lastActionFeedback.value = "Sent Backspace (KEYCODE_DEL)"
+    }
+
+    fun sendEnter() {
+        fireTvManager.sendEnter()
+        _lastActionFeedback.value = "Submitted Query (KEYCODE_ENTER)"
+    }
+
+    fun sendSearchQuery(query: String) {
+        fireTvManager.sendSearchQuery(query)
+        _lastActionFeedback.value = "Searched on TV: \"$query\""
+        _currentKeyboardInput.value = ""
+    }
+
+    fun appendKeyboardCharacter(char: String) {
+        _currentKeyboardInput.value += char
+        fireTvManager.injectText(char)
+    }
+
+    fun clearKeyboardInput() {
+        _currentKeyboardInput.value = ""
     }
 
     fun submitKeyboardInput() {
