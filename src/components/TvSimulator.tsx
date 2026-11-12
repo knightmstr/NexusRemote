@@ -1,5 +1,5 @@
 import React from 'react';
-import { ConnectionStatus, InstalledApp } from '../types';
+import { ConnectionStatus, InstalledApp, TvBrandProfile } from '../types';
 import { Tv, ShieldAlert, Check, Search, Wifi, Volume2, VolumeX, Film, Play, Sparkles, X } from 'lucide-react';
 
 interface TvSimulatorProps {
@@ -14,6 +14,7 @@ interface TvSimulatorProps {
   connectionStatus: ConnectionStatus;
   lastCommand: string | null;
   apps: InstalledApp[];
+  selectedBrand: TvBrandProfile;
   onAuthorizeAdb: () => void;
   onRejectAdb: () => void;
   onSelectTile: (tileIndex: number) => void;
@@ -51,6 +52,7 @@ export const TvSimulator: React.FC<TvSimulatorProps> = ({
   connectionStatus,
   lastCommand,
   apps,
+  selectedBrand,
   onAuthorizeAdb,
   onRejectAdb,
   onSelectTile,
@@ -70,9 +72,16 @@ export const TvSimulator: React.FC<TvSimulatorProps> = ({
       {/* TV Bezel Top Bar */}
       <div className="flex items-center justify-between px-4 py-2.5 bg-slate-900 border-b border-slate-800/80 text-xs">
         <div className="flex items-center gap-2">
-          <Tv className="w-4 h-4 text-sky-400" />
-          <span className="font-semibold text-slate-200">Fire TV Edition 4K UHD</span>
-          <span className="text-[10px] px-2 py-0.5 rounded bg-slate-800 text-slate-400 font-mono">
+          <div
+            className="w-3 h-3 rounded-full flex items-center justify-center text-[8px] font-black text-white"
+            style={{ backgroundColor: selectedBrand.color || '#3B82F6' }}
+          >
+            ●
+          </div>
+          <span className="font-bold text-slate-100">
+            {selectedBrand.name} {selectedBrand.modelSeries.split('/')[0].trim()}
+          </span>
+          <span className="text-[10px] px-2 py-0.5 rounded bg-slate-800 text-slate-300 font-mono border border-slate-700">
             {activeSource}
           </span>
         </div>
@@ -122,8 +131,12 @@ export const TvSimulator: React.FC<TvSimulatorProps> = ({
           // TV Screen Off State
           <div className="flex-1 flex flex-col items-center justify-center bg-zinc-950 text-slate-600">
             <Tv className="w-16 h-16 stroke-1 text-slate-800 mb-2" />
-            <p className="text-sm font-mono tracking-wider">TELEVISION STANDBY (0.5W)</p>
-            <p className="text-xs text-slate-700 mt-1">Press IR Power or send ADB keyevent 26 to turn on</p>
+            <p className="text-sm font-mono tracking-wider text-slate-400">
+              {selectedBrand.name.toUpperCase()} TELEVISION STANDBY (0.5W)
+            </p>
+            <p className="text-xs text-slate-600 mt-1">
+              Press IR Power ({selectedBrand.carrierFrequencyHz / 1000}kHz {selectedBrand.protocol}) or ADB keyevent 26 to turn on
+            </p>
           </div>
         ) : (
           // TV Screen On State
@@ -135,7 +148,9 @@ export const TvSimulator: React.FC<TvSimulatorProps> = ({
                   FTV
                 </div>
                 <div>
-                  <div className="text-xs font-semibold text-slate-200">Living Room Fire TV</div>
+                  <div className="text-xs font-semibold text-slate-200">
+                    Living Room Fire TV on {selectedBrand.name}
+                  </div>
                   <div className="text-[10px] text-slate-400">Fire OS 8.1.0 • Android 11</div>
                 </div>
               </div>
@@ -327,8 +342,12 @@ export const TvSimulator: React.FC<TvSimulatorProps> = ({
               {lastCommand || 'Idle / Listening for remote signals'}
             </span>
           </div>
-          <div className="font-mono text-[10px] text-slate-500">
-            TCP PORT 5555 • IR 38kHz NEC
+          <div className="font-mono text-[10px] text-slate-500 flex items-center gap-2">
+            <span>ADB: 5555</span>
+            <span>•</span>
+            <span className="text-slate-400 font-semibold">
+              IR: {selectedBrand.carrierFrequencyHz / 1000}kHz {selectedBrand.protocol} ({selectedBrand.name})
+            </span>
           </div>
         </div>
       </div>

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { RemoteMode, ConnectionStatus, InstalledApp, IrPulseEvent } from '../types';
+import { RemoteMode, ConnectionStatus, InstalledApp, IrPulseEvent, TvBrandProfile } from '../types';
 import {
   Power,
   Tv,
@@ -23,7 +23,10 @@ import {
   Keyboard,
   Delete,
   CornerDownLeft,
-  X
+  X,
+  Sliders,
+  Check,
+  ChevronRight as ChevronArrowRight
 } from 'lucide-react';
 
 interface RemoteControlProps {
@@ -31,9 +34,12 @@ interface RemoteControlProps {
   connectionStatus: ConnectionStatus;
   targetIp: string;
   hasIrEmitter: boolean;
+  selectedBrand: TvBrandProfile;
+  availableBrands: TvBrandProfile[];
   appDockList: InstalledApp[];
   lastIrPulse: IrPulseEvent | null;
   onSetRemoteMode: (mode: RemoteMode) => void;
+  onSelectBrand: (brand: TvBrandProfile) => void;
   onConnectIp: (ip: string) => void;
   onDisconnectIp: () => void;
   onDpadCommand: (keyCode: number, label: string) => void;
@@ -66,9 +72,12 @@ export const RemoteControl: React.FC<RemoteControlProps> = ({
   connectionStatus,
   targetIp,
   hasIrEmitter,
+  selectedBrand,
+  availableBrands,
   appDockList,
   lastIrPulse,
   onSetRemoteMode,
+  onSelectBrand,
   onConnectIp,
   onDisconnectIp,
   onDpadCommand,
@@ -89,6 +98,7 @@ export const RemoteControl: React.FC<RemoteControlProps> = ({
 }) => {
   const [inputText, setInputText] = useState('');
   const [showIpConfig, setShowIpConfig] = useState(false);
+  const [showBrandSelector, setShowBrandSelector] = useState(false);
   const [editingIp, setEditingIp] = useState(targetIp);
   const [isPressingLed, setIsPressingLed] = useState(false);
   const [showVirtualKeyboard, setShowVirtualKeyboard] = useState(false);
@@ -133,27 +143,39 @@ export const RemoteControl: React.FC<RemoteControlProps> = ({
           }`}
         />
         <div className="text-[9px] tracking-widest text-slate-500 uppercase font-mono mt-1">
-          Consumer IR Blaster
+          Consumer IR Blaster • {selectedBrand.carrierFrequencyHz / 1000} kHz
         </div>
       </div>
 
-      {/* Top Remote Header: Status Badges */}
-      <div className="w-full bg-slate-900/90 rounded-2xl p-2.5 border border-slate-800/80 mb-3 text-xs flex items-center justify-between">
-        {/* IR Hardware Readiness Badge */}
-        <div className="flex items-center gap-1.5">
+      {/* Top Remote Header: Status & TV Brand Badges */}
+      <div className="w-full bg-slate-900/90 rounded-2xl p-2 border border-slate-800/80 mb-3 text-xs flex items-center justify-between gap-1.5">
+        {/* Universal TV Brand Selector Button */}
+        <button
+          onClick={() => {
+            setShowBrandSelector(!showBrandSelector);
+            setShowIpConfig(false);
+          }}
+          title="Select Television Brand and Model"
+          className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-slate-800 hover:bg-slate-750 border border-slate-700/70 text-[10px] text-slate-200 font-semibold transition-all group"
+        >
           <span
             className={`w-2 h-2 rounded-full ${
               hasIrEmitter ? 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)]' : 'bg-slate-600'
             }`}
           />
-          <span className="text-[10px] font-semibold text-slate-300">
-            {hasIrEmitter ? 'IR READY' : 'NO IR HW'}
+          <Tv className="w-3 h-3 text-sky-400 group-hover:scale-110 transition-transform" />
+          <span className="font-bold tracking-tight text-white">{selectedBrand.name.split(' ')[0]}</span>
+          <span className="text-[9px] text-sky-300 font-mono">
+            {selectedBrand.carrierFrequencyHz / 1000}k
           </span>
-        </div>
+        </button>
 
         {/* Wi-Fi ADB Connection Pill */}
         <button
-          onClick={() => setShowIpConfig(!showIpConfig)}
+          onClick={() => {
+            setShowIpConfig(!showIpConfig);
+            setShowBrandSelector(false);
+          }}
           className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-mono border transition-all ${
             connectionStatus === 'CONNECTED'
               ? 'bg-emerald-950/80 border-emerald-500/50 text-emerald-300 hover:bg-emerald-900/80'
@@ -172,6 +194,62 @@ export const RemoteControl: React.FC<RemoteControlProps> = ({
           <span>{targetIp || 'Set IP'}</span>
         </button>
       </div>
+
+      {/* Expandable Universal TV Brand Selector Modal / Dropdown */}
+      {showBrandSelector && (
+        <div className="w-full bg-slate-900 p-3 rounded-2xl border border-sky-500/40 shadow-xl mb-3 text-xs max-h-72 overflow-y-auto">
+          <div className="font-bold text-slate-100 mb-2 flex items-center justify-between">
+            <span className="flex items-center gap-1.5 text-sky-400">
+              <Tv className="w-4 h-4" />
+              <span>Universal TV Remote Setup</span>
+            </span>
+            <button
+              onClick={() => setShowBrandSelector(false)}
+              className="text-slate-400 hover:text-white p-0.5 rounded"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+          <p className="text-[10px] text-slate-400 mb-2.5">
+            Select your TV brand & series to calibrate IR pulse frequency and waveform protocol:
+          </p>
+          <div className="flex flex-col gap-1.5">
+            {availableBrands.map((brand) => {
+              const isSelected = brand.id === selectedBrand.id;
+              return (
+                <button
+                  key={brand.id}
+                  onClick={() => {
+                    onSelectBrand(brand);
+                    setShowBrandSelector(false);
+                  }}
+                  className={`flex items-center justify-between p-2 rounded-xl text-left transition-all border ${
+                    isSelected
+                      ? 'bg-sky-950/80 border-sky-500 text-white shadow-md'
+                      : 'bg-slate-850 hover:bg-slate-800 border-slate-750 text-slate-300'
+                  }`}
+                >
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold text-xs text-white">{brand.name}</span>
+                      <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-slate-800 text-sky-300 border border-slate-700">
+                        {brand.carrierFrequencyHz / 1000} kHz
+                      </span>
+                      <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-purple-950/60 text-purple-300 border border-purple-800/40">
+                        {brand.protocol}
+                      </span>
+                    </div>
+                    <div className="text-[10px] text-slate-400 truncate mt-0.5">
+                      {brand.modelSeries}
+                    </div>
+                  </div>
+                  {isSelected && <Check className="w-4 h-4 text-sky-400 shrink-0 ml-2" />}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Expandable IP Config Dialog */}
       {showIpConfig && (
@@ -224,7 +302,7 @@ export const RemoteControl: React.FC<RemoteControlProps> = ({
           }`}
         >
           <Radio className="w-3.5 h-3.5" />
-          <span>INFRARED (IR)</span>
+          <span>UNIVERSAL IR</span>
         </button>
 
         <button
@@ -236,7 +314,7 @@ export const RemoteControl: React.FC<RemoteControlProps> = ({
           }`}
         >
           <Wifi className="w-3.5 h-3.5" />
-          <span>WI-FI (ADB)</span>
+          <span>FIRE TV (ADB)</span>
         </button>
       </div>
 
@@ -244,11 +322,38 @@ export const RemoteControl: React.FC<RemoteControlProps> = ({
       {remoteMode === 'INFRARED' ? (
         // 1. INFRARED MATRIX PANEL
         <div className="w-full flex flex-col items-center">
+          {/* Universal TV Active Model Badge & Selector Trigger */}
+          <button
+            onClick={() => setShowBrandSelector(true)}
+            className="w-full bg-slate-900 hover:bg-slate-850 border border-slate-800 hover:border-sky-500/50 rounded-2xl p-2.5 mb-3 flex items-center justify-between text-left transition-all group"
+          >
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-xl bg-sky-500/10 border border-sky-500/30 flex items-center justify-center text-sky-400">
+                <Tv className="w-4 h-4" />
+              </div>
+              <div>
+                <div className="text-xs font-bold text-white flex items-center gap-1.5">
+                  <span>{selectedBrand.name}</span>
+                  <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-sky-950 text-sky-300 border border-sky-800">
+                    {selectedBrand.carrierFrequencyHz / 1000} kHz
+                  </span>
+                </div>
+                <div className="text-[10px] text-slate-400">
+                  {selectedBrand.modelSeries}
+                </div>
+              </div>
+            </div>
+            <div className="flex items-center gap-1 text-[10px] font-semibold text-sky-400 group-hover:text-sky-300">
+              <span>Change TV</span>
+              <ChevronArrowRight className="w-3.5 h-3.5" />
+            </div>
+          </button>
+
           {/* Top Row: Power & Source */}
           <div className="w-full flex items-center justify-between px-2 mb-3">
             <button
               onClick={() => handleIrAction(onIrPower)}
-              title="Power Toggle (38kHz NEC 0x08)"
+              title={`Power Toggle (${selectedBrand.carrierFrequencyHz / 1000}kHz ${selectedBrand.protocol})`}
               className="flex flex-col items-center group"
             >
               <div className="w-13 h-13 rounded-full bg-rose-600 hover:bg-rose-500 active:scale-95 transition-all flex items-center justify-center shadow-lg shadow-rose-900/50 border border-rose-400/30">
@@ -259,8 +364,8 @@ export const RemoteControl: React.FC<RemoteControlProps> = ({
 
             {/* Carrier Frequency Pulse Visualizer */}
             <div className="px-3 py-1 rounded-full bg-slate-900 border border-slate-800 text-[10px] font-mono text-slate-400 text-center">
-              <div>38.0 kHz</div>
-              <div className="text-[8px] text-rose-400">NEC PROTOCOL</div>
+              <div>{selectedBrand.carrierFrequencyHz / 1000}.0 kHz</div>
+              <div className="text-[8px] text-rose-400 font-bold">{selectedBrand.protocol}</div>
             </div>
 
             <button
@@ -305,7 +410,7 @@ export const RemoteControl: React.FC<RemoteControlProps> = ({
           {/* Full 0-9 Numeric Keypad Layout */}
           <div className="w-full bg-slate-900/90 rounded-3xl p-3 border border-slate-800 flex flex-col items-center mb-4">
             <div className="text-[10px] font-bold tracking-widest text-slate-500 uppercase mb-2">
-              Numeric Keypad Matrix
+              Numeric Keypad Matrix ({selectedBrand.name})
             </div>
             <div className="grid grid-cols-3 gap-2.5 w-full max-w-[240px]">
               {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((digit) => (

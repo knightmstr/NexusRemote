@@ -2,7 +2,6 @@ package com.hybridremote.app.ui
 
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -10,7 +9,6 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -23,6 +21,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -33,6 +32,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Backspace
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Clear
@@ -48,12 +48,14 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.SettingsInputHdmi
+import androidx.compose.material.icons.filled.Tv
 import androidx.compose.material.icons.filled.VolumeDown
 import androidx.compose.material.icons.filled.VolumeMute
 import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material.icons.filled.WifiOff
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -68,11 +70,8 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
-import androidx.compose.material3.TabRowDefaults
-import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -83,18 +82,17 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.hybridremote.app.hardware.TvBrandProfile
 import com.hybridremote.app.network.FireTvManager
 import com.hybridremote.app.network.FireTvManager.ConnectionStatus
 import com.hybridremote.app.viewmodel.RemoteModeState
@@ -103,8 +101,8 @@ import com.hybridremote.app.viewmodel.RemoteViewModel
 
 /**
  * Root Adaptive Jetpack Compose Screen for the Hybrid Unified TV Remote.
- * Hosts master IR/Wi-Fi toggle, hardware indicators, dynamic mode panels,
- * and the dynamic third-party Fire TV app dock.
+ * Hosts master IR/Wi-Fi toggle, Universal TV Brand Selector, hardware indicators,
+ * dynamic mode panels, and the dynamic third-party Fire TV app dock.
  */
 @Composable
 fun RemoteMainScreen(
@@ -139,7 +137,9 @@ fun RemoteMainScreen(
                 connectionStatus = uiState.connectionStatus,
                 targetIp = uiState.savedTargetIp,
                 hasIr = uiState.hasIrHardware,
-                onIpClicked = { showIpDialog = !showIpDialog }
+                selectedBrandName = uiState.selectedBrand.name,
+                onIpClicked = { showIpDialog = !showIpDialog },
+                onBrandClicked = { viewModel.toggleBrandSelector() }
             )
 
             AnimatedVisibility(visible = showIpDialog) {
@@ -179,6 +179,8 @@ fun RemoteMainScreen(
                     RemoteModeState.INFRARED -> {
                         InfraredMatrixPanel(
                             hasIr = uiState.hasIrHardware,
+                            activeBrand = uiState.selectedBrand,
+                            onOpenBrandSelector = { viewModel.toggleBrandSelector() },
                             onPower = { viewModel.transmitIrPower() },
                             onSource = { viewModel.transmitIrSource() },
                             onVolUp = { viewModel.transmitIrVolumeUp() },
@@ -224,6 +226,16 @@ fun RemoteMainScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
         }
+
+        // Universal TV Brand Selection Dialog
+        if (uiState.isBrandSelectorOpen) {
+            UniversalTvBrandDialog(
+                brands = uiState.availableBrands,
+                selectedBrand = uiState.selectedBrand,
+                onSelectBrand = { brandId -> viewModel.selectTvBrand(brandId) },
+                onDismiss = { viewModel.toggleBrandSelector() }
+            )
+        }
     }
 }
 
@@ -235,7 +247,9 @@ private fun HeaderStatusBar(
     connectionStatus: ConnectionStatus,
     targetIp: String,
     hasIr: Boolean,
-    onIpClicked: () -> Unit
+    selectedBrandName: String,
+    onIpClicked: () -> Unit,
+    onBrandClicked: () -> Unit
 ) {
     Card(
         shape = RoundedCornerShape(16.dp),
@@ -249,22 +263,44 @@ private fun HeaderStatusBar(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Left: Device Brand & IR Status
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    modifier = Modifier
-                        .size(10.dp)
-                        .clip(CircleShape)
-                        .background(if (hasIr) Color(0xFF00E676) else Color(0xFF757575))
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = if (hasIr) "IR EMITTER READY" else "NO IR HARDWARE",
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = if (hasIr) Color(0xFF81C784) else Color(0xFF9E9E9E),
-                    letterSpacing = 0.5.sp
-                )
+            // Left: Device Brand Selector Pill
+            Surface(
+                onClick = onBrandClicked,
+                shape = RoundedCornerShape(20.dp),
+                color = Color(0xFF222838),
+                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF38435C))
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(8.dp)
+                            .clip(CircleShape)
+                            .background(if (hasIr) Color(0xFF00E676) else Color(0xFF757575))
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Icon(
+                        imageVector = Icons.Default.Tv,
+                        contentDescription = "TV Brand",
+                        tint = Color(0xFF60A5FA),
+                        modifier = Modifier.size(13.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = selectedBrandName.split(" ")[0].uppercase(),
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                    )
+                    Icon(
+                        imageVector = Icons.Default.ArrowDropDown,
+                        contentDescription = "Select TV Brand",
+                        tint = Color(0xFF94A3B8),
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
             }
 
             // Right: Wi-Fi ADB Target IP & Connection Pill
@@ -327,6 +363,128 @@ private fun HeaderStatusBar(
             }
         }
     }
+}
+
+/**
+ * Universal TV Brand Selection Dialog modal.
+ * Lists all 10 supported TV brand profiles with carrier frequency badges and protocol tags.
+ */
+@Composable
+private fun UniversalTvBrandDialog(
+    brands: List<TvBrandProfile>,
+    selectedBrand: TvBrandProfile,
+    onSelectBrand: (String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Default.Tv,
+                    contentDescription = null,
+                    tint = Color(0xFF3B82F6),
+                    modifier = Modifier.size(24.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Column {
+                    Text(
+                        text = "Universal TV Selector",
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                    )
+                    Text(
+                        text = "Select your television model for IR commands",
+                        fontSize = 12.sp,
+                        color = Color(0xFF94A3B8)
+                    )
+                }
+            }
+        },
+        text = {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(340.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                items(brands, key = { it.id }) { brand ->
+                    val isCurrent = brand.id == selectedBrand.id
+                    Surface(
+                        onClick = { onSelectBrand(brand.id) },
+                        shape = RoundedCornerShape(12.dp),
+                        color = if (isCurrent) Color(0xFF1E3A8A) else Color(0xFF1E232F),
+                        border = androidx.compose.foundation.BorderStroke(
+                            width = 1.dp,
+                            color = if (isCurrent) Color(0xFF60A5FA) else Color(0xFF2E384D)
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(12.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = brand.name,
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White
+                                )
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    Surface(
+                                        shape = RoundedCornerShape(4.dp),
+                                        color = Color(0xFF111827)
+                                    ) {
+                                        Text(
+                                            text = "${brand.carrierFrequencyHz / 1000} kHz",
+                                            fontSize = 10.sp,
+                                            fontWeight = FontWeight.Medium,
+                                            color = Color(0xFF38BDF8),
+                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                        )
+                                    }
+                                    Surface(
+                                        shape = RoundedCornerShape(4.dp),
+                                        color = Color(0xFF111827)
+                                    ) {
+                                        Text(
+                                            text = brand.protocol.name,
+                                            fontSize = 10.sp,
+                                            fontWeight = FontWeight.Medium,
+                                            color = Color(0xFFA78BFA),
+                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                        )
+                                    }
+                                }
+                            }
+
+                            if (isCurrent) {
+                                Icon(
+                                    imageVector = Icons.Default.Check,
+                                    contentDescription = "Active Brand",
+                                    tint = Color(0xFF60A5FA),
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Close", color = Color(0xFF60A5FA), fontWeight = FontWeight.Bold)
+            }
+        },
+        containerColor = Color(0xFF141822),
+        shape = RoundedCornerShape(20.dp)
+    )
 }
 
 /**
@@ -437,8 +595,8 @@ private fun MasterModeToggle(
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = if (mode == RemoteModeState.INFRARED) "INFRARED (IR)" else "WI-FI (ADB)",
-                        fontSize = 12.sp,
+                        text = if (mode == RemoteModeState.INFRARED) "INFRARED (UNIVERSAL IR)" else "WI-FI (FIRE TV ADB)",
+                        fontSize = 11.sp,
                         fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                         color = textColor,
                         letterSpacing = 0.5.sp
@@ -451,11 +609,13 @@ private fun MasterModeToggle(
 
 /**
  * INFRARED MODE PANEL:
- * Standard matrix layout with Power, Source Selection, Volume Up/Down, Mute, and full 0-9 Numeric D-Pad.
+ * Universal TV Remote with brand selector pill, Power, Source, Volume Up/Down, Mute, and full 0-9 Numeric D-Pad.
  */
 @Composable
 private fun InfraredMatrixPanel(
     hasIr: Boolean,
+    activeBrand: TvBrandProfile,
+    onOpenBrandSelector: () -> Unit,
     onPower: () -> Unit,
     onSource: () -> Unit,
     onVolUp: () -> Unit,
@@ -475,6 +635,59 @@ private fun InfraredMatrixPanel(
                 .padding(20.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
+            // Universal TV Brand Selector Button Banner
+            Surface(
+                onClick = onOpenBrandSelector,
+                shape = RoundedCornerShape(12.dp),
+                color = Color(0xFF1C2230),
+                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF2F3A50)),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 16.dp)
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.Tv,
+                            contentDescription = null,
+                            tint = Color(0xFF60A5FA),
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Column {
+                            Text(
+                                text = "TV MODEL: ${activeBrand.name}",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White
+                            )
+                            Text(
+                                text = "Protocol: ${activeBrand.protocol.name} • ${activeBrand.carrierFrequencyHz / 1000} kHz Carrier",
+                                fontSize = 10.sp,
+                                color = Color(0xFF94A3B8)
+                            )
+                        }
+                    }
+
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = Color(0xFF2563EB)
+                    ) {
+                        Text(
+                            text = "CHANGE",
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                        )
+                    }
+                }
+            }
+
             // Top Control Row: Power & Source
             Row(
                 modifier = Modifier.fillMaxWidth(),

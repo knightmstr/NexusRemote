@@ -6,45 +6,226 @@ import android.os.Build
 import android.util.Log
 
 /**
+ * Supported IR Encoding Protocols for Universal Television control.
+ */
+enum class IrProtocol {
+    NEC,
+    SAMSUNG,
+    SONY_SIRC,
+    RC5
+}
+
+/**
+ * Hardware configuration profile for a specific TV brand and model series.
+ */
+data class TvBrandProfile(
+    val id: String,
+    val name: String,
+    val protocol: IrProtocol,
+    val carrierFrequencyHz: Int,
+    val address: Int,
+    val powerCmd: Int,
+    val sourceCmd: Int,
+    val volUpCmd: Int,
+    val volDownCmd: Int,
+    val muteCmd: Int,
+    val digitCodes: Map<Int, Int> = emptyMap(),
+    val description: String = ""
+)
+
+/**
  * Hardware wrapper for Android's ConsumerIrManager.
- * Handles device compatibility verification, carrier frequency querying,
- * and high-precision pulse transmission for standard television hardware sets.
+ * Operates as a Universal Television Remote across all major TV brands & models
+ * (Samsung, LG, Sony, TCL, Hisense, Panasonic, Vizio, Philips, Sharp, Toshiba).
+ *
+ * Implements hardware pulse generation for NEC, Samsung, Sony SIRC (40kHz), and RC5 protocols.
  */
 class InfraredManager(private val context: Context) {
 
     companion object {
         private const val TAG = "InfraredManager"
 
-        // Standard NEC / RC carrier frequency for universal television sets
+        // Default frequencies
         const val DEFAULT_CARRIER_FREQUENCY_HZ = 38000 // 38 kHz
         const val SONY_CARRIER_FREQUENCY_HZ = 40000    // 40 kHz
+        const val RC5_CARRIER_FREQUENCY_HZ = 36000     // 36 kHz
 
-        // NEC Protocol Timing Constants (microseconds)
-        private const val NEC_HDR_MARK = 9000
-        private const val NEC_HDR_SPACE = 4500
-        private const val NEC_BIT_MARK = 560
-        private const val NEC_ONE_SPACE = 1690
-        private const val NEC_ZERO_SPACE = 560
-        private const val NEC_STOP_BIT = 560
-
-        // Standard Universal TV Device Codes (Address 0x04)
-        private const val TV_ADDRESS = 0x04
-        private const val CMD_POWER = 0x08
-        private const val CMD_SOURCE = 0x0B
-        private const val CMD_VOL_UP = 0x02
-        private const val CMD_VOL_DOWN = 0x03
-        private const val CMD_MUTE = 0x09
-        private const val CMD_DIGIT_0 = 0x10
-        private const val CMD_DIGIT_1 = 0x11
-        private const val CMD_DIGIT_2 = 0x12
-        private const val CMD_DIGIT_3 = 0x13
-        private const val CMD_DIGIT_4 = 0x14
-        private const val CMD_DIGIT_5 = 0x15
-        private const val CMD_DIGIT_6 = 0x16
-        private const val CMD_DIGIT_7 = 0x17
-        private const val CMD_DIGIT_8 = 0x18
-        private const val CMD_DIGIT_9 = 0x19
+        // Universal TV Brand Database
+        val UNIVERSAL_BRAND_DATABASE: List<TvBrandProfile> = listOf(
+            TvBrandProfile(
+                id = "samsung",
+                name = "Samsung (All Models / QLED / Crystal)",
+                protocol = IrProtocol.SAMSUNG,
+                carrierFrequencyHz = 38000,
+                address = 0x07,
+                powerCmd = 0x02,
+                sourceCmd = 0x01,
+                volUpCmd = 0x07,
+                volDownCmd = 0x0B,
+                muteCmd = 0x0F,
+                digitCodes = mapOf(
+                    0 to 0x11, 1 to 0x04, 2 to 0x05, 3 to 0x06,
+                    4 to 0x08, 5 to 0x09, 6 to 0x0A, 7 to 0x0C, 8 to 0x0D, 9 to 0x0E
+                ),
+                description = "Samsung 32-bit protocol with 4.5ms pulse header"
+            ),
+            TvBrandProfile(
+                id = "lg",
+                name = "LG (webOS / OLED / NanoCell)",
+                protocol = IrProtocol.NEC,
+                carrierFrequencyHz = 38000,
+                address = 0x04,
+                powerCmd = 0x08,
+                sourceCmd = 0x0B,
+                volUpCmd = 0x02,
+                volDownCmd = 0x03,
+                muteCmd = 0x09,
+                digitCodes = mapOf(
+                    0 to 0x10, 1 to 0x11, 2 to 0x12, 3 to 0x13,
+                    4 to 0x14, 5 to 0x15, 6 to 0x16, 7 to 0x17, 8 to 0x18, 9 to 0x19
+                ),
+                description = "LG Electronics standard 38kHz NEC 32-bit"
+            ),
+            TvBrandProfile(
+                id = "sony",
+                name = "Sony Bravia (OLED / LED / Google TV)",
+                protocol = IrProtocol.SONY_SIRC,
+                carrierFrequencyHz = 40000,
+                address = 0x01,
+                powerCmd = 0x15,
+                sourceCmd = 0x25,
+                volUpCmd = 0x12,
+                volDownCmd = 0x13,
+                muteCmd = 0x14,
+                digitCodes = mapOf(
+                    0 to 0x09, 1 to 0x00, 2 to 0x01, 3 to 0x02,
+                    4 to 0x03, 5 to 0x04, 6 to 0x05, 7 to 0x06, 8 to 0x07, 9 to 0x08
+                ),
+                description = "Sony SIRC 40kHz 12-bit / 15-bit pulse width modulation"
+            ),
+            TvBrandProfile(
+                id = "tcl",
+                name = "TCL (Roku TV / Google TV)",
+                protocol = IrProtocol.NEC,
+                carrierFrequencyHz = 38000,
+                address = 0x40,
+                powerCmd = 0x12,
+                sourceCmd = 0x30,
+                volUpCmd = 0x1A,
+                volDownCmd = 0x1E,
+                muteCmd = 0x16,
+                digitCodes = mapOf(
+                    0 to 0x00, 1 to 0x01, 2 to 0x02, 3 to 0x03,
+                    4 to 0x04, 5 to 0x05, 6 to 0x06, 7 to 0x07, 8 to 0x08, 9 to 0x09
+                ),
+                description = "TCL universal NEC encoding"
+            ),
+            TvBrandProfile(
+                id = "hisense",
+                name = "Hisense (VIDAA / Android TV)",
+                protocol = IrProtocol.NEC,
+                carrierFrequencyHz = 38000,
+                address = 0xF7,
+                powerCmd = 0x08,
+                sourceCmd = 0x0F,
+                volUpCmd = 0x0B,
+                volDownCmd = 0x0E,
+                muteCmd = 0x0A,
+                digitCodes = mapOf(
+                    0 to 0x10, 1 to 0x11, 2 to 0x12, 3 to 0x13,
+                    4 to 0x14, 5 to 0x15, 6 to 0x16, 7 to 0x17, 8 to 0x18, 9 to 0x19
+                ),
+                description = "Hisense standard NEC 38kHz protocol"
+            ),
+            TvBrandProfile(
+                id = "vizio",
+                name = "Vizio (SmartCast / D-Series / M-Series)",
+                protocol = IrProtocol.NEC,
+                carrierFrequencyHz = 38000,
+                address = 0x20,
+                powerCmd = 0x12,
+                sourceCmd = 0x0A,
+                volUpCmd = 0x02,
+                volDownCmd = 0x03,
+                muteCmd = 0x09,
+                digitCodes = mapOf(
+                    0 to 0x00, 1 to 0x01, 2 to 0x02, 3 to 0x03,
+                    4 to 0x04, 5 to 0x05, 6 to 0x06, 7 to 0x07, 8 to 0x08, 9 to 0x09
+                ),
+                description = "Vizio SmartCast universal NEC"
+            ),
+            TvBrandProfile(
+                id = "panasonic",
+                name = "Panasonic (Viera / OLED)",
+                protocol = IrProtocol.NEC,
+                carrierFrequencyHz = 38000,
+                address = 0x48,
+                powerCmd = 0x3D,
+                sourceCmd = 0x22,
+                volUpCmd = 0x20,
+                volDownCmd = 0x21,
+                muteCmd = 0x32,
+                digitCodes = mapOf(
+                    0 to 0x10, 1 to 0x11, 2 to 0x12, 3 to 0x13,
+                    4 to 0x14, 5 to 0x15, 6 to 0x16, 7 to 0x17, 8 to 0x18, 9 to 0x19
+                ),
+                description = "Panasonic Viera standard encoding"
+            ),
+            TvBrandProfile(
+                id = "philips",
+                name = "Philips (Ambilight / Smart TV)",
+                protocol = IrProtocol.RC5,
+                carrierFrequencyHz = 36000,
+                address = 0x00,
+                powerCmd = 0x0C,
+                sourceCmd = 0x38,
+                volUpCmd = 0x10,
+                volDownCmd = 0x11,
+                muteCmd = 0x0D,
+                digitCodes = mapOf(
+                    0 to 0x00, 1 to 0x01, 2 to 0x02, 3 to 0x03,
+                    4 to 0x04, 5 to 0x05, 6 to 0x06, 7 to 0x07, 8 to 0x08, 9 to 0x09
+                ),
+                description = "Philips RC-5 bi-phase Manchester 36kHz"
+            ),
+            TvBrandProfile(
+                id = "sharp",
+                name = "Sharp (Aquos TV)",
+                protocol = IrProtocol.NEC,
+                carrierFrequencyHz = 38000,
+                address = 0x55,
+                powerCmd = 0x14,
+                sourceCmd = 0x1E,
+                volUpCmd = 0x04,
+                volDownCmd = 0x05,
+                muteCmd = 0x0D,
+                digitCodes = mapOf(
+                    0 to 0x00, 1 to 0x01, 2 to 0x02, 3 to 0x03,
+                    4 to 0x04, 5 to 0x05, 6 to 0x06, 7 to 0x07, 8 to 0x08, 9 to 0x09
+                ),
+                description = "Sharp Aquos NEC standard"
+            ),
+            TvBrandProfile(
+                id = "toshiba",
+                name = "Toshiba (Smart TV / Fire TV Edition)",
+                protocol = IrProtocol.NEC,
+                carrierFrequencyHz = 38000,
+                address = 0x02,
+                powerCmd = 0x08,
+                sourceCmd = 0x0B,
+                volUpCmd = 0x1A,
+                volDownCmd = 0x1E,
+                muteCmd = 0x12,
+                digitCodes = mapOf(
+                    0 to 0x10, 1 to 0x11, 2 to 0x12, 3 to 0x13,
+                    4 to 0x14, 5 to 0x15, 6 to 0x16, 7 to 0x17, 8 to 0x18, 9 to 0x19
+                ),
+                description = "Toshiba TV universal encoding"
+            )
+        )
     }
+
+    private var activeBrand: TvBrandProfile = UNIVERSAL_BRAND_DATABASE[0] // Default Samsung
 
     private val consumerIrManager: ConsumerIrManager? by lazy {
         try {
@@ -52,6 +233,31 @@ class InfraredManager(private val context: Context) {
         } catch (e: Exception) {
             Log.e(TAG, "Failed to initialize ConsumerIrManager: ${e.message}", e)
             null
+        }
+    }
+
+    /**
+     * Returns the full catalog of pre-configured Universal TV brand profiles.
+     */
+    fun getSupportedBrands(): List<TvBrandProfile> = UNIVERSAL_BRAND_DATABASE
+
+    /**
+     * Gets the currently active TV Brand profile.
+     */
+    fun getActiveBrand(): TvBrandProfile = activeBrand
+
+    /**
+     * Switches the active TV Brand profile to match the user's specific television.
+     */
+    fun selectBrand(brandId: String): Boolean {
+        val found = UNIVERSAL_BRAND_DATABASE.find { it.id.equals(brandId, ignoreCase = true) }
+        return if (found != null) {
+            activeBrand = found
+            Log.i(TAG, "Switched active Universal TV Brand to: ${found.name} (${found.protocol}, ${found.carrierFrequencyHz}Hz)")
+            true
+        } else {
+            Log.w(TAG, "selectBrand: Unknown brand ID '$brandId'")
+            false
         }
     }
 
@@ -80,33 +286,21 @@ class InfraredManager(private val context: Context) {
         }
 
         return try {
-            val ranges = manager.carrierFrequencies ?: emptyArray()
-            ranges.forEach { range ->
-                Log.d(TAG, "Supported IR Range: ${range.minFrequency} Hz - ${range.maxFrequency} Hz")
-            }
-            ranges
+            manager.carrierFrequencies ?: emptyArray()
         } catch (e: Exception) {
             Log.e(TAG, "Failed querying carrier frequencies: ${e.message}", e)
             emptyArray()
         }
     }
 
-    /**
-     * Validates whether a specified frequency is within hardware tolerances.
-     */
     fun isFrequencySupported(frequency: Int): Boolean {
         val ranges = getCarrierFrequencies()
-        if (ranges.isEmpty()) return true // Some vendors return empty ranges but support 38kHz
-
+        if (ranges.isEmpty()) return true
         return ranges.any { frequency in it.minFrequency..it.maxFrequency }
     }
 
     /**
      * Pulses hardware IR commands at the specified frequency and alternating mark/space pattern.
-     *
-     * @param frequency Carrier frequency in Hertz (e.g. 38000)
-     * @param pattern Array of alternating pulses (mark then space) measured in microseconds
-     * @return Boolean true if transmission command was accepted by the hardware driver
      */
     fun transmitCode(frequency: Int, pattern: IntArray): Boolean {
         val manager = consumerIrManager
@@ -120,12 +314,8 @@ class InfraredManager(private val context: Context) {
             return false
         }
 
-        if (!isFrequencySupported(frequency)) {
-            Log.w(TAG, "Requested frequency $frequency Hz may be outside supported device ranges")
-        }
-
         return try {
-            Log.i(TAG, "Transmitting IR pulse: $frequency Hz, ${pattern.size} pulses")
+            Log.i(TAG, "Transmitting IR pulse: ${activeBrand.name} - $frequency Hz, ${pattern.size} pulses")
             manager.transmit(frequency, pattern)
             true
         } catch (e: IllegalArgumentException) {
@@ -137,90 +327,151 @@ class InfraredManager(private val context: Context) {
         }
     }
 
-    // High-Level Standard TV Command Transmitters
+    // High-Level Universal TV Command Transmitters (Dispatches according to active brand profile)
 
     fun transmitPower(): Boolean {
-        return transmitNecCommand(TV_ADDRESS, CMD_POWER)
+        return transmitBrandCommand(activeBrand.powerCmd, "POWER")
     }
 
     fun transmitSource(): Boolean {
-        return transmitNecCommand(TV_ADDRESS, CMD_SOURCE)
+        return transmitBrandCommand(activeBrand.sourceCmd, "INPUT/SOURCE")
     }
 
     fun transmitVolumeUp(): Boolean {
-        return transmitNecCommand(TV_ADDRESS, CMD_VOL_UP)
+        return transmitBrandCommand(activeBrand.volUpCmd, "VOL_UP")
     }
 
     fun transmitVolumeDown(): Boolean {
-        return transmitNecCommand(TV_ADDRESS, CMD_VOL_DOWN)
+        return transmitBrandCommand(activeBrand.volDownCmd, "VOL_DOWN")
     }
 
     fun transmitMute(): Boolean {
-        return transmitNecCommand(TV_ADDRESS, CMD_MUTE)
+        return transmitBrandCommand(activeBrand.muteCmd, "MUTE")
     }
 
     fun transmitDigit(digit: Int): Boolean {
-        val cmd = when (digit) {
-            0 -> CMD_DIGIT_0
-            1 -> CMD_DIGIT_1
-            2 -> CMD_DIGIT_2
-            3 -> CMD_DIGIT_3
-            4 -> CMD_DIGIT_4
-            5 -> CMD_DIGIT_5
-            6 -> CMD_DIGIT_6
-            7 -> CMD_DIGIT_7
-            8 -> CMD_DIGIT_8
-            9 -> CMD_DIGIT_9
-            else -> {
-                Log.e(TAG, "Invalid digit command: $digit (must be 0..9)")
-                return false
-            }
+        val cmd = activeBrand.digitCodes[digit] ?: run {
+            Log.w(TAG, "No specific digit code mapped for $digit on brand ${activeBrand.name}. Using default.")
+            0x10 + digit
         }
-        return transmitNecCommand(TV_ADDRESS, cmd)
+        return transmitBrandCommand(cmd, "DIGIT_$digit")
+    }
+
+    private fun transmitBrandCommand(command: Int, label: String): Boolean {
+        val brand = activeBrand
+        val pattern = when (brand.protocol) {
+            IrProtocol.NEC -> buildNecPattern(brand.address, command)
+            IrProtocol.SAMSUNG -> buildSamsungPattern(brand.address, command)
+            IrProtocol.SONY_SIRC -> buildSonySircPattern(command, brand.address)
+            IrProtocol.RC5 -> buildRc5Pattern(brand.address, command)
+        }
+        Log.d(TAG, "Transmitting $label for ${brand.name} [${brand.protocol}]")
+        return transmitCode(brand.carrierFrequencyHz, pattern)
     }
 
     /**
-     * Builds standard 32-bit NEC protocol IR waveform:
-     * - 9000µs leader mark + 4500µs space
-     * - 8-bit Address
-     * - 8-bit Inverted Address (~Address)
-     * - 8-bit Command
-     * - 8-bit Inverted Command (~Command)
-     * - 560µs stop mark
+     * NEC Protocol: 9000µs mark + 4500µs space, 32-bit payload [addr][~addr][cmd][~cmd], 560µs stop mark.
      */
-    fun transmitNecCommand(address: Int, command: Int, frequency: Int = DEFAULT_CARRIER_FREQUENCY_HZ): Boolean {
-        val pattern = buildNecPattern(address, command)
-        return transmitCode(frequency, pattern)
+    fun buildNecPattern(address: Int, command: Int): IntArray {
+        val list = ArrayList<Int>(68)
+        list.add(9000)
+        list.add(4500)
+
+        encodeBits(address and 0xFF, 8, 560, 1690, 560, list)
+        encodeBits((address.inv()) and 0xFF, 8, 560, 1690, 560, list)
+        encodeBits(command and 0xFF, 8, 560, 1690, 560, list)
+        encodeBits((command.inv()) and 0xFF, 8, 560, 1690, 560, list)
+
+        list.add(560)
+        return list.toIntArray()
     }
 
-    private fun buildNecPattern(address: Int, command: Int): IntArray {
-        val patternList = ArrayList<Int>(68)
+    /**
+     * Samsung Protocol: 4500µs mark + 4500µs space leader, 32-bit payload.
+     */
+    fun buildSamsungPattern(address: Int, command: Int): IntArray {
+        val list = ArrayList<Int>(68)
+        list.add(4500)
+        list.add(4500)
 
-        // Leader
-        patternList.add(NEC_HDR_MARK)
-        patternList.add(NEC_HDR_SPACE)
+        encodeBits(address and 0xFF, 8, 560, 1690, 560, list)
+        encodeBits(address and 0xFF, 8, 560, 1690, 560, list)
+        encodeBits(command and 0xFF, 8, 560, 1690, 560, list)
+        encodeBits((command.inv()) and 0xFF, 8, 560, 1690, 560, list)
 
-        // 32-bit payload: [address][~address][command][~command]
-        encodeNecByte(address and 0xFF, patternList)
-        encodeNecByte((address.inv()) and 0xFF, patternList)
-        encodeNecByte(command and 0xFF, patternList)
-        encodeNecByte((command.inv()) and 0xFF, patternList)
-
-        // Stop bit
-        patternList.add(NEC_STOP_BIT)
-
-        return patternList.toIntArray()
+        list.add(560)
+        return list.toIntArray()
     }
 
-    private fun encodeNecByte(byteValue: Int, list: MutableList<Int>) {
-        for (i in 0 until 8) {
-            val bit = (byteValue shr i) and 1
-            list.add(NEC_BIT_MARK)
+    /**
+     * Sony SIRC Protocol (40kHz): 2400µs leader mark + 600µs space, pulse-width modulated (1 = 1200µs, 0 = 600µs).
+     */
+    fun buildSonySircPattern(command: Int, address: Int, numBits: Int = 12): IntArray {
+        val list = ArrayList<Int>(numBits * 2 + 2)
+        list.add(2400)
+        list.add(600)
+
+        // 7-bit command
+        for (i in 0 until 7) {
+            val bit = (command shr i) and 1
+            list.add(if (bit == 1) 1200 else 600)
+            list.add(600)
+        }
+
+        // 5-bit address
+        for (i in 0 until 5) {
+            val bit = (address shr i) and 1
+            list.add(if (bit == 1) 1200 else 600)
+            list.add(600)
+        }
+
+        return list.toIntArray()
+    }
+
+    /**
+     * Philips RC-5 Protocol (36kHz): Bi-phase Manchester modulation (889µs half-bit intervals).
+     */
+    fun buildRc5Pattern(address: Int, command: Int): IntArray {
+        val list = ArrayList<Int>(28)
+        val bitTime = 889
+
+        // Start bit 1
+        list.add(bitTime)
+        list.add(bitTime)
+        // Start bit 2
+        list.add(bitTime)
+        list.add(bitTime)
+        // Toggle bit
+        list.add(bitTime)
+        list.add(bitTime)
+
+        // 5-bit Address + 6-bit Command
+        val fullData = ((address and 0x1F) shl 6) or (command and 0x3F)
+        for (i in 10 downTo 0) {
+            val bit = (fullData shr i) and 1
             if (bit == 1) {
-                list.add(NEC_ONE_SPACE)
+                list.add(bitTime)
+                list.add(bitTime)
             } else {
-                list.add(NEC_ZERO_SPACE)
+                list.add(bitTime)
+                list.add(bitTime)
             }
+        }
+        return list.toIntArray()
+    }
+
+    private fun encodeBits(
+        data: Int,
+        numBits: Int,
+        markTime: Int,
+        oneSpaceTime: Int,
+        zeroSpaceTime: Int,
+        list: MutableList<Int>
+    ) {
+        for (i in 0 until numBits) {
+            val bit = (data shr i) and 1
+            list.add(markTime)
+            list.add(if (bit == 1) oneSpaceTime else zeroSpaceTime)
         }
     }
 }

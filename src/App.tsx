@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { RemoteMode, ConnectionStatus, InstalledApp, LogEntry, IrPulseEvent } from './types';
+import { RemoteMode, ConnectionStatus, InstalledApp, LogEntry, IrPulseEvent, TvBrandProfile } from './types';
+import { UNIVERSAL_TV_BRANDS } from './data/tvBrands';
 import { RemoteControl } from './components/RemoteControl';
 import { TvSimulator } from './components/TvSimulator';
 import { LogcatConsole } from './components/LogcatConsole';
@@ -14,7 +15,8 @@ import {
   Wifi,
   Cpu,
   CheckCircle2,
-  Activity
+  Activity,
+  Sliders
 } from 'lucide-react';
 
 const INITIAL_APPS: InstalledApp[] = [
@@ -50,7 +52,7 @@ const INITIAL_APPS: InstalledApp[] = [
     id: 'plex',
     name: 'Plex',
     packageName: 'com.plexapp.android',
-    color: '#E5A00D',
+    color: '#E50914',
     iconName: 'Server',
   },
   {
@@ -80,6 +82,9 @@ export default function App() {
   const [hasIrEmitter, setHasIrEmitter] = useState(true);
   const [lastIrPulse, setLastIrPulse] = useState<IrPulseEvent | null>(null);
 
+  // Universal TV Brand Profile State
+  const [selectedBrand, setSelectedBrand] = useState<TvBrandProfile>(UNIVERSAL_TV_BRANDS[0]);
+
   // Simulated TV State
   const [isPoweredOn, setIsPoweredOn] = useState(true);
   const [activeSource, setActiveSource] = useState('Fire TV OS');
@@ -105,34 +110,41 @@ export default function App() {
     },
     {
       id: '2',
-      timestamp: '17:12:00.120',
-      tag: 'RemoteViewModel',
-      level: 'D',
-      message: 'Preferences DataStore loaded cached target IP: 192.168.1.150',
+      timestamp: '17:12:00.110',
+      tag: 'InfraredManager',
+      level: 'I',
+      message: 'Universal IR loaded 10 TV profiles: Samsung (38kHz), LG (38kHz), Sony Bravia (40kHz), TCL, Hisense, Vizio, Panasonic, Philips (36kHz), Sharp, Toshiba.',
     },
     {
       id: '3',
+      timestamp: '17:12:00.120',
+      tag: 'RemoteViewModel',
+      level: 'D',
+      message: 'Preferences DataStore loaded cached target IP: 192.168.1.150 and Brand: Samsung (All Models)',
+    },
+    {
+      id: '4',
       timestamp: '17:12:00.340',
       tag: 'FireTvManager',
       level: 'I',
       message: 'ADB TCP/IP socket connected to 192.168.1.150:5555',
     },
     {
-      id: '4',
+      id: '5',
       timestamp: '17:12:00.365',
       tag: 'AdbProtocol',
       level: 'D',
       message: 'TX A_CNXN (version=0x01000000, maxdata=4096, banner=host::HybridRemoteTV)',
     },
     {
-      id: '5',
+      id: '6',
       timestamp: '17:12:00.412',
       tag: 'AdbProtocol',
       level: 'D',
       message: 'RX A_CNXN (device::ro.product.model=AFTMM;features=shell_v2,cmd)',
     },
     {
-      id: '6',
+      id: '7',
       timestamp: '17:12:00.450',
       tag: 'FireTvManager',
       level: 'I',
@@ -159,6 +171,27 @@ export default function App() {
     setLogs((prev) => [...prev.slice(-150), newEntry]);
   };
 
+  // Switch Universal TV Brand Profile
+  const handleSelectBrand = (brand: TvBrandProfile) => {
+    setSelectedBrand(brand);
+    addLog(
+      'InfraredManager',
+      'I',
+      `Switched Universal TV Brand to: ${brand.name} [${brand.modelSeries}]`
+    );
+    addLog(
+      'InfraredManager',
+      'D',
+      `Hardware tuned: Carrier=${brand.carrierFrequencyHz / 1000} kHz, Protocol=${brand.protocol}, Address=0x${brand.address.toString(16).toUpperCase()}`
+    );
+    addLog(
+      'RemoteViewModel',
+      'D',
+      `Persisted TV Brand ID '${brand.id}' to Preferences DataStore`
+    );
+    setLastCommand(`TV Model: ${brand.name} (${brand.carrierFrequencyHz / 1000}kHz ${brand.protocol})`);
+  };
+
   // Remote Mode Change
   const handleSetRemoteMode = (mode: RemoteMode) => {
     setRemoteMode(mode);
@@ -166,7 +199,9 @@ export default function App() {
       'RemoteViewModel',
       'I',
       `Switched RemoteModeState to ${mode}. Routing commands via ${
-        mode === 'INFRARED' ? 'Hardware Consumer IR Blaster' : 'ADB TCP/IP (port 5555)'
+        mode === 'INFRARED'
+          ? `Hardware Consumer IR Blaster (${selectedBrand.name} ${selectedBrand.carrierFrequencyHz / 1000}kHz)`
+          : 'ADB TCP/IP (port 5555)'
       }`
     );
   };
@@ -360,25 +395,28 @@ export default function App() {
     setLastCommand(`Launch: ${app.name} (${app.packageName})`);
   };
 
-  // IR Commands
-  const recordIrPulse = (cmdName: string, patternLength = 68, freq = 38000) => {
+  // Hardware IR Commands Dispatch
+  const recordIrPulse = (cmdName: string, patternLength = 68) => {
+    const freq = selectedBrand.carrierFrequencyHz;
     setLastIrPulse({
       commandName: cmdName,
       frequencyHz: freq,
       patternLength,
       timestamp: Date.now(),
+      brandName: selectedBrand.name,
+      protocol: selectedBrand.protocol,
     });
     addLog(
       'InfraredManager',
       'I',
-      `Transmitted IR pulse: ${freq} Hz, ${patternLength} pulses (NEC 0x04, ${cmdName})`
+      `Transmitted IR pulse: ${freq} Hz, ${patternLength} pulses [${selectedBrand.name} ${selectedBrand.protocol}, ${cmdName}]`
     );
-    setLastCommand(`IR: 38kHz NEC [${cmdName}]`);
+    setLastCommand(`IR: ${freq / 1000}kHz ${selectedBrand.protocol} [${cmdName}]`);
   };
 
   const handleIrPower = () => {
     setIsPoweredOn((prev) => !prev);
-    recordIrPulse('CMD_POWER 0x08');
+    recordIrPulse(`CMD_POWER 0x${selectedBrand.powerCmd.toString(16).toUpperCase()}`);
   };
 
   const handleIrSource = () => {
@@ -386,28 +424,29 @@ export default function App() {
     const currentIdx = sources.indexOf(activeSource);
     const nextSource = sources[(currentIdx + 1) % sources.length];
     setActiveSource(nextSource);
-    recordIrPulse('CMD_SOURCE 0x0B');
+    recordIrPulse(`CMD_SOURCE 0x${selectedBrand.sourceCmd.toString(16).toUpperCase()}`);
   };
 
   const handleIrVolumeUp = () => {
     setIsMuted(false);
     setVolume((prev) => Math.min(100, prev + 5));
-    recordIrPulse('CMD_VOL_UP 0x02');
+    recordIrPulse(`CMD_VOL_UP 0x${selectedBrand.volUpCmd.toString(16).toUpperCase()}`);
   };
 
   const handleIrVolumeDown = () => {
     setVolume((prev) => Math.max(0, prev - 5));
-    recordIrPulse('CMD_VOL_DOWN 0x03');
+    recordIrPulse(`CMD_VOL_DOWN 0x${selectedBrand.volDownCmd.toString(16).toUpperCase()}`);
   };
 
   const handleIrMute = () => {
     setIsMuted((prev) => !prev);
-    recordIrPulse('CMD_MUTE 0x09');
+    recordIrPulse(`CMD_MUTE 0x${selectedBrand.muteCmd.toString(16).toUpperCase()}`);
   };
 
   const handleIrDigit = (digit: number) => {
     setOnScreenText((prev) => `${prev}${digit}`);
-    recordIrPulse(`CMD_DIGIT_${digit} 0x1${digit}`);
+    const code = selectedBrand.digitCodes[digit] || 0x10 + digit;
+    recordIrPulse(`CMD_DIGIT_${digit} 0x${code.toString(16).toUpperCase()}`);
   };
 
   const handleRefreshApps = () => {
@@ -433,11 +472,14 @@ export default function App() {
                   Hybrid Unified TV Remote
                 </h1>
                 <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
-                  Android Native • Kotlin
+                  Universal IR & Fire TV ADB
+                </span>
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-sky-500/10 text-sky-400 border border-sky-500/30 hidden sm:inline-block">
+                  TV: {selectedBrand.name} ({selectedBrand.carrierFrequencyHz / 1000}kHz)
                 </span>
               </div>
               <p className="text-xs text-slate-400">
-                Low-level Consumer IR Pulse & ADB TCP/IP (Port 5555) Architecture
+                Universal Multi-Protocol IR Blaster (Samsung, LG, Sony SIRC 40k, RC5) & ADB TCP/IP (Port 5555)
               </p>
             </div>
           </div>
@@ -480,10 +522,10 @@ export default function App() {
               <div className="w-full flex items-center justify-between mb-3 px-1">
                 <span className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
                   <Smartphone className="w-4 h-4 text-sky-400" />
-                  Jetpack Compose Remote Control
+                  Universal Remote Control
                 </span>
                 <span className="text-[11px] font-mono text-slate-500">
-                  Mode: <strong className="text-sky-300">{remoteMode}</strong>
+                  Target: <strong className="text-sky-300">{selectedBrand.name}</strong>
                 </span>
               </div>
 
@@ -492,9 +534,12 @@ export default function App() {
                 connectionStatus={connectionStatus}
                 targetIp={targetIp}
                 hasIrEmitter={hasIrEmitter}
+                selectedBrand={selectedBrand}
+                availableBrands={UNIVERSAL_TV_BRANDS}
                 appDockList={apps}
                 lastIrPulse={lastIrPulse}
                 onSetRemoteMode={handleSetRemoteMode}
+                onSelectBrand={handleSelectBrand}
                 onConnectIp={handleConnectIp}
                 onDisconnectIp={handleDisconnectIp}
                 onDpadCommand={handleDpadCommand}
@@ -522,11 +567,13 @@ export default function App() {
                 <div className="flex items-center justify-between mb-2 px-1">
                   <span className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
                     <Tv className="w-4 h-4 text-sky-400" />
-                    Simulated Amazon Fire TV Device
+                    Simulated Television & Fire TV
                   </span>
                   <div className="flex items-center gap-2 text-xs text-slate-400">
-                    <span className="font-mono text-slate-500">ADB TCP IP:</span>
-                    <span className="font-mono text-sky-300 font-semibold">{targetIp}:5555</span>
+                    <span className="font-mono text-slate-500">Universal IR:</span>
+                    <span className="font-mono text-amber-300 font-semibold">
+                      {selectedBrand.carrierFrequencyHz / 1000}kHz {selectedBrand.protocol}
+                    </span>
                   </div>
                 </div>
 
@@ -542,6 +589,7 @@ export default function App() {
                   connectionStatus={connectionStatus}
                   lastCommand={lastCommand}
                   apps={apps}
+                  selectedBrand={selectedBrand}
                   onAuthorizeAdb={handleAuthorizeAdb}
                   onRejectAdb={handleRejectAdb}
                   onSelectTile={(idx) => {
@@ -582,7 +630,9 @@ export default function App() {
         <div className="flex items-center gap-3">
           <span>Principal Android Hardware & Network Architecture</span>
           <span>•</span>
-          <span className="font-mono text-slate-400">Dispatchers.IO • Preferences DataStore • ConsumerIrManager</span>
+          <span className="font-mono text-slate-400">
+            ConsumerIrManager Universal Remote (10 Brands) • Preferences DataStore • Dispatchers.IO
+          </span>
         </div>
         <div className="font-mono text-[11px] text-slate-500">
           FireTvManager • InfraredManager • RemoteViewModel • RemoteMainScreen

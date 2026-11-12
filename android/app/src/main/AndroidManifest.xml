@@ -1,14 +1,26 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
-    <!-- Wi-Fi & ADB over TCP/IP (Port 5555) Permissions -->
+    <!-- Wi-Fi & Local Network Communications -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
 
-    <!-- Consumer Infrared Hardware Permissions -->
+    <!-- Android 13+ Local Network & Device Discovery (bypasses fine location requirement) -->
+    <uses-permission
+        android:name="android.permission.NEARBY_WIFI_DEVICES"
+        android:usesPermissionFlags="neverForLocation"
+        tools:targetApi="tiramisu" />
+
+    <!-- Haptic feedback for tactile buttons -->
+    <uses-permission android:name="android.permission.VIBRATE" />
+
+    <!-- Consumer IR Blaster Hardware Access -->
     <uses-permission android:name="android.permission.TRANSMIT_IR" />
-    <!-- Declare IR hardware as optional so app still installs on devices without IR blaster -->
+
+    <!-- Declare IR hardware as optional so the app installs on devices without an IR blaster (e.g. HONOR Magic V5) -->
     <uses-feature
         android:name="android.hardware.consumerir"
         android:required="false" />
@@ -16,19 +28,21 @@
     <application
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
-        android:label="Hybrid TV Remote"
+        android:label="NexusRemote"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@android:style/Theme.Material.NoActionBar">
+
         <activity
             android:name=".MainActivity"
             android:exported="true"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize"
             android:theme="@android:style/Theme.Material.NoActionBar">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
-    </application>
 
+    </application>
 </manifest>

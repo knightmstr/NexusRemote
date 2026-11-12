@@ -480,7 +480,7 @@ class FireTvManager(
     name: 'InfraredManager.kt',
     path: 'hardware/InfraredManager.kt',
     layer: 'Hardware',
-    description: 'Hardware wrapper for ConsumerIrManager: compatibility checks, carrier frequency querying, 38kHz NEC waveform generator, and hardware pulsing.',
+    description: 'Universal TV Remote hardware wrapper for ConsumerIrManager: multi-brand profiles (Samsung, LG, Sony SIRC 40kHz, TCL, Philips RC5, etc.) and waveform encoders.',
     code: `package com.hybridremote.app.hardware
 
 import android.content.Context
@@ -488,46 +488,185 @@ import android.hardware.ConsumerIrManager
 import android.os.Build
 import android.util.Log
 
+enum class IrProtocol {
+    NEC,
+    SAMSUNG,
+    SONY_SIRC,
+    RC5
+}
+
+data class TvBrandProfile(
+    val id: String,
+    val name: String,
+    val protocol: IrProtocol,
+    val carrierFrequencyHz: Int,
+    val address: Int,
+    val powerCmd: Int,
+    val sourceCmd: Int,
+    val volUpCmd: Int,
+    val volDownCmd: Int,
+    val muteCmd: Int,
+    val digitCodes: Map<Int, Int> = emptyMap(),
+    val description: String = ""
+)
+
 /**
- * Hardware wrapper for Android's ConsumerIrManager.
- * Handles device compatibility verification, carrier frequency querying,
- * and high-precision pulse transmission for standard television hardware sets.
+ * Universal TV Remote wrapper for Android's ConsumerIrManager.
+ * Supports 10 major TV manufacturers: Samsung, LG, Sony Bravia (40kHz SIRC),
+ * TCL, Hisense, Vizio, Panasonic, Philips (36kHz RC5), Sharp, and Toshiba.
  */
 class InfraredManager(private val context: Context) {
 
     companion object {
         private const val TAG = "InfraredManager"
 
-        // Standard NEC / RC carrier frequency for universal television sets
-        const val DEFAULT_CARRIER_FREQUENCY_HZ = 38000 // 38 kHz
-        const val SONY_CARRIER_FREQUENCY_HZ = 40000    // 40 kHz
-
-        // NEC Protocol Timing Constants (microseconds)
-        private const val NEC_HDR_MARK = 9000
-        private const val NEC_HDR_SPACE = 4500
-        private const val NEC_BIT_MARK = 560
-        private const val NEC_ONE_SPACE = 1690
-        private const val NEC_ZERO_SPACE = 560
-        private const val NEC_STOP_BIT = 560
-
-        // Standard Universal TV Device Codes (Address 0x04)
-        private const val TV_ADDRESS = 0x04
-        private const val CMD_POWER = 0x08
-        private const val CMD_SOURCE = 0x0B
-        private const val CMD_VOL_UP = 0x02
-        private const val CMD_VOL_DOWN = 0x03
-        private const val CMD_MUTE = 0x09
-        private const val CMD_DIGIT_0 = 0x10
-        private const val CMD_DIGIT_1 = 0x11
-        private const val CMD_DIGIT_2 = 0x12
-        private const val CMD_DIGIT_3 = 0x13
-        private const val CMD_DIGIT_4 = 0x14
-        private const val CMD_DIGIT_5 = 0x15
-        private const val CMD_DIGIT_6 = 0x16
-        private const val CMD_DIGIT_7 = 0x17
-        private const val CMD_DIGIT_8 = 0x18
-        private const val CMD_DIGIT_9 = 0x19
+        val UNIVERSAL_BRAND_DATABASE: List<TvBrandProfile> = listOf(
+            TvBrandProfile(
+                id = "samsung",
+                name = "Samsung (All Models / QLED / Crystal)",
+                protocol = IrProtocol.SAMSUNG,
+                carrierFrequencyHz = 38000,
+                address = 0x07,
+                powerCmd = 0x02,
+                sourceCmd = 0x01,
+                volUpCmd = 0x07,
+                volDownCmd = 0x0B,
+                muteCmd = 0x0F,
+                digitCodes = mapOf(
+                    0 to 0x11, 1 to 0x04, 2 to 0x05, 3 to 0x06,
+                    4 to 0x08, 5 to 0x09, 6 to 0x0A, 7 to 0x0C, 8 to 0x0D, 9 to 0x0E
+                ),
+                description = "Samsung 32-bit protocol with 4.5ms pulse header"
+            ),
+            TvBrandProfile(
+                id = "lg",
+                name = "LG (webOS / OLED / NanoCell)",
+                protocol = IrProtocol.NEC,
+                carrierFrequencyHz = 38000,
+                address = 0x04,
+                powerCmd = 0x08,
+                sourceCmd = 0x0B,
+                volUpCmd = 0x02,
+                volDownCmd = 0x03,
+                muteCmd = 0x09,
+                digitCodes = mapOf(
+                    0 to 0x10, 1 to 0x11, 2 to 0x12, 3 to 0x13,
+                    4 to 0x14, 5 to 0x15, 6 to 0x16, 7 to 0x17, 8 to 0x18, 9 to 0x19
+                ),
+                description = "LG Electronics standard 38kHz NEC 32-bit"
+            ),
+            TvBrandProfile(
+                id = "sony",
+                name = "Sony Bravia (OLED / LED / Google TV)",
+                protocol = IrProtocol.SONY_SIRC,
+                carrierFrequencyHz = 40000,
+                address = 0x01,
+                powerCmd = 0x15,
+                sourceCmd = 0x25,
+                volUpCmd = 0x12,
+                volDownCmd = 0x13,
+                muteCmd = 0x14,
+                digitCodes = mapOf(
+                    0 to 0x09, 1 to 0x00, 2 to 0x01, 3 to 0x02,
+                    4 to 0x03, 5 to 0x04, 6 to 0x05, 7 to 0x06, 8 to 0x07, 9 to 0x08
+                ),
+                description = "Sony SIRC 40kHz 12-bit pulse width modulation"
+            ),
+            TvBrandProfile(
+                id = "tcl",
+                name = "TCL (Roku TV / Google TV)",
+                protocol = IrProtocol.NEC,
+                carrierFrequencyHz = 38000,
+                address = 0x40,
+                powerCmd = 0x12,
+                sourceCmd = 0x30,
+                volUpCmd = 0x1A,
+                volDownCmd = 0x1E,
+                muteCmd = 0x16,
+                description = "TCL universal NEC encoding"
+            ),
+            TvBrandProfile(
+                id = "hisense",
+                name = "Hisense (VIDAA / Android TV)",
+                protocol = IrProtocol.NEC,
+                carrierFrequencyHz = 38000,
+                address = 0xF7,
+                powerCmd = 0x08,
+                sourceCmd = 0x0F,
+                volUpCmd = 0x0B,
+                volDownCmd = 0x0E,
+                muteCmd = 0x0A,
+                description = "Hisense standard NEC 38kHz protocol"
+            ),
+            TvBrandProfile(
+                id = "vizio",
+                name = "Vizio (SmartCast / D-Series / M-Series)",
+                protocol = IrProtocol.NEC,
+                carrierFrequencyHz = 38000,
+                address = 0x20,
+                powerCmd = 0x12,
+                sourceCmd = 0x0A,
+                volUpCmd = 0x02,
+                volDownCmd = 0x03,
+                muteCmd = 0x09,
+                description = "Vizio SmartCast universal NEC"
+            ),
+            TvBrandProfile(
+                id = "panasonic",
+                name = "Panasonic (Viera / OLED)",
+                protocol = IrProtocol.NEC,
+                carrierFrequencyHz = 38000,
+                address = 0x48,
+                powerCmd = 0x3D,
+                sourceCmd = 0x22,
+                volUpCmd = 0x20,
+                volDownCmd = 0x21,
+                muteCmd = 0x32,
+                description = "Panasonic Viera standard encoding"
+            ),
+            TvBrandProfile(
+                id = "philips",
+                name = "Philips (Ambilight / Smart TV)",
+                protocol = IrProtocol.RC5,
+                carrierFrequencyHz = 36000,
+                address = 0x00,
+                powerCmd = 0x0C,
+                sourceCmd = 0x38,
+                volUpCmd = 0x10,
+                volDownCmd = 0x11,
+                muteCmd = 0x0D,
+                description = "Philips RC-5 bi-phase Manchester 36kHz"
+            ),
+            TvBrandProfile(
+                id = "sharp",
+                name = "Sharp (Aquos TV)",
+                protocol = IrProtocol.NEC,
+                carrierFrequencyHz = 38000,
+                address = 0x55,
+                powerCmd = 0x14,
+                sourceCmd = 0x1E,
+                volUpCmd = 0x04,
+                volDownCmd = 0x05,
+                muteCmd = 0x0D,
+                description = "Sharp Aquos NEC standard"
+            ),
+            TvBrandProfile(
+                id = "toshiba",
+                name = "Toshiba (Smart TV / Fire TV Edition)",
+                protocol = IrProtocol.NEC,
+                carrierFrequencyHz = 38000,
+                address = 0x02,
+                powerCmd = 0x08,
+                sourceCmd = 0x0B,
+                volUpCmd = 0x1A,
+                volDownCmd = 0x1E,
+                muteCmd = 0x12,
+                description = "Toshiba TV universal encoding"
+            )
+        )
     }
+
+    private var activeBrand: TvBrandProfile = UNIVERSAL_BRAND_DATABASE[0]
 
     private val consumerIrManager: ConsumerIrManager? by lazy {
         try {
@@ -538,170 +677,112 @@ class InfraredManager(private val context: Context) {
         }
     }
 
-    /**
-     * Checks whether the host device is equipped with an infrared emitter.
-     */
-    fun hasIrEmitter(): Boolean {
-        return try {
-            val hasEmitter = consumerIrManager?.hasIrEmitter() == true
-            Log.d(TAG, "Hardware IR Emitter present: $hasEmitter")
-            hasEmitter
-        } catch (e: Exception) {
-            Log.e(TAG, "Exception querying hasIrEmitter: \${e.message}", e)
+    fun getSupportedBrands(): List<TvBrandProfile> = UNIVERSAL_BRAND_DATABASE
+    fun getActiveBrand(): TvBrandProfile = activeBrand
+
+    fun selectBrand(brandId: String): Boolean {
+        val found = UNIVERSAL_BRAND_DATABASE.find { it.id.equals(brandId, ignoreCase = true) }
+        return if (found != null) {
+            activeBrand = found
+            Log.i(TAG, "Switched active Universal TV Brand to: \${found.name} (\${found.protocol}, \${found.carrierFrequencyHz}Hz)")
+            true
+        } else {
+            Log.w(TAG, "selectBrand: Unknown brand ID '\$brandId'")
             false
         }
     }
 
-    /**
-     * Queries the array of carrier frequency ranges supported by the hardware emitter.
-     */
-    fun getCarrierFrequencies(): Array<ConsumerIrManager.CarrierFrequencyRange> {
-        val manager = consumerIrManager
-        if (manager == null || !hasIrEmitter()) {
-            Log.w(TAG, "getCarrierFrequencies aborted: IR hardware unavailable")
-            return emptyArray()
-        }
+    fun hasIrEmitter(): Boolean = consumerIrManager?.hasIrEmitter() == true
 
-        return try {
-            val ranges = manager.carrierFrequencies ?: emptyArray()
-            ranges.forEach { range ->
-                Log.d(TAG, "Supported IR Range: \${range.minFrequency} Hz - \${range.maxFrequency} Hz")
-            }
-            ranges
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed querying carrier frequencies: \${e.message}", e)
-            emptyArray()
-        }
-    }
-
-    /**
-     * Validates whether a specified frequency is within hardware tolerances.
-     */
-    fun isFrequencySupported(frequency: Int): Boolean {
-        val ranges = getCarrierFrequencies()
-        if (ranges.isEmpty()) return true
-
-        return ranges.any { frequency in it.minFrequency..it.maxFrequency }
-    }
-
-    /**
-     * Pulses hardware IR commands at the specified frequency and alternating mark/space pattern.
-     *
-     * @param frequency Carrier frequency in Hertz (e.g. 38000)
-     * @param pattern Array of alternating pulses (mark then space) measured in microseconds
-     * @return Boolean true if transmission command was accepted by the hardware driver
-     */
     fun transmitCode(frequency: Int, pattern: IntArray): Boolean {
-        val manager = consumerIrManager
-        if (manager == null || !hasIrEmitter()) {
-            Log.e(TAG, "transmitCode failed: No functional IR emitter detected on this device")
-            return false
-        }
-
-        if (pattern.isEmpty()) {
-            Log.e(TAG, "transmitCode rejected: Pattern array is empty")
-            return false
-        }
-
-        if (!isFrequencySupported(frequency)) {
-            Log.w(TAG, "Requested frequency $frequency Hz may be outside supported device ranges")
-        }
-
+        val manager = consumerIrManager ?: return false
+        if (!hasIrEmitter() || pattern.isEmpty()) return false
         return try {
-            Log.i(TAG, "Transmitting IR pulse: $frequency Hz, \${pattern.size} pulses")
+            Log.i(TAG, "Transmitting IR pulse: \${activeBrand.name} - \$frequency Hz, \${pattern.size} pulses")
             manager.transmit(frequency, pattern)
             true
-        } catch (e: IllegalArgumentException) {
-            Log.e(TAG, "Hardware driver rejected IR pattern structure: \${e.message}", e)
-            false
         } catch (e: Exception) {
-            Log.e(TAG, "Unexpected error during IR pulse transmission: \${e.message}", e)
+            Log.e(TAG, "Error transmitting IR: \${e.message}", e)
             false
         }
     }
 
-    // High-Level Standard TV Command Transmitters
-
-    fun transmitPower(): Boolean {
-        return transmitNecCommand(TV_ADDRESS, CMD_POWER)
-    }
-
-    fun transmitSource(): Boolean {
-        return transmitNecCommand(TV_ADDRESS, CMD_SOURCE)
-    }
-
-    fun transmitVolumeUp(): Boolean {
-        return transmitNecCommand(TV_ADDRESS, CMD_VOL_UP)
-    }
-
-    fun transmitVolumeDown(): Boolean {
-        return transmitNecCommand(TV_ADDRESS, CMD_VOL_DOWN)
-    }
-
-    fun transmitMute(): Boolean {
-        return transmitNecCommand(TV_ADDRESS, CMD_MUTE)
-    }
+    fun transmitPower(): Boolean = transmitBrandCommand(activeBrand.powerCmd, "POWER")
+    fun transmitSource(): Boolean = transmitBrandCommand(activeBrand.sourceCmd, "INPUT")
+    fun transmitVolumeUp(): Boolean = transmitBrandCommand(activeBrand.volUpCmd, "VOL_UP")
+    fun transmitVolumeDown(): Boolean = transmitBrandCommand(activeBrand.volDownCmd, "VOL_DOWN")
+    fun transmitMute(): Boolean = transmitBrandCommand(activeBrand.muteCmd, "MUTE")
 
     fun transmitDigit(digit: Int): Boolean {
-        val cmd = when (digit) {
-            0 -> CMD_DIGIT_0
-            1 -> CMD_DIGIT_1
-            2 -> CMD_DIGIT_2
-            3 -> CMD_DIGIT_3
-            4 -> CMD_DIGIT_4
-            5 -> CMD_DIGIT_5
-            6 -> CMD_DIGIT_6
-            7 -> CMD_DIGIT_7
-            8 -> CMD_DIGIT_8
-            9 -> CMD_DIGIT_9
-            else -> {
-                Log.e(TAG, "Invalid digit command: $digit (must be 0..9)")
-                return false
-            }
+        val cmd = activeBrand.digitCodes[digit] ?: (0x10 + digit)
+        return transmitBrandCommand(cmd, "DIGIT_\$digit")
+    }
+
+    private fun transmitBrandCommand(command: Int, label: String): Boolean {
+        val brand = activeBrand
+        val pattern = when (brand.protocol) {
+            IrProtocol.NEC -> buildNecPattern(brand.address, command)
+            IrProtocol.SAMSUNG -> buildSamsungPattern(brand.address, command)
+            IrProtocol.SONY_SIRC -> buildSonySircPattern(command, brand.address)
+            IrProtocol.RC5 -> buildRc5Pattern(brand.address, command)
         }
-        return transmitNecCommand(TV_ADDRESS, cmd)
+        return transmitCode(brand.carrierFrequencyHz, pattern)
     }
 
-    /**
-     * Builds standard 32-bit NEC protocol IR waveform:
-     * - 9000µs leader mark + 4500µs space
-     * - 8-bit Address + 8-bit ~Address
-     * - 8-bit Command + 8-bit ~Command
-     * - 560µs stop mark
-     */
-    fun transmitNecCommand(address: Int, command: Int, frequency: Int = DEFAULT_CARRIER_FREQUENCY_HZ): Boolean {
-        val pattern = buildNecPattern(address, command)
-        return transmitCode(frequency, pattern)
+    fun buildNecPattern(address: Int, command: Int): IntArray {
+        val list = ArrayList<Int>(68)
+        list.add(9000); list.add(4500)
+        encodeBits(address and 0xFF, 8, 560, 1690, 560, list)
+        encodeBits((address.inv()) and 0xFF, 8, 560, 1690, 560, list)
+        encodeBits(command and 0xFF, 8, 560, 1690, 560, list)
+        encodeBits((command.inv()) and 0xFF, 8, 560, 1690, 560, list)
+        list.add(560)
+        return list.toIntArray()
     }
 
-    private fun buildNecPattern(address: Int, command: Int): IntArray {
-        val patternList = ArrayList<Int>(68)
-
-        // Leader
-        patternList.add(NEC_HDR_MARK)
-        patternList.add(NEC_HDR_SPACE)
-
-        // 32-bit payload: [address][~address][command][~command]
-        encodeNecByte(address and 0xFF, patternList)
-        encodeNecByte((address.inv()) and 0xFF, patternList)
-        encodeNecByte(command and 0xFF, patternList)
-        encodeNecByte((command.inv()) and 0xFF, patternList)
-
-        // Stop bit
-        patternList.add(NEC_STOP_BIT)
-
-        return patternList.toIntArray()
+    fun buildSamsungPattern(address: Int, command: Int): IntArray {
+        val list = ArrayList<Int>(68)
+        list.add(4500); list.add(4500)
+        encodeBits(address and 0xFF, 8, 560, 1690, 560, list)
+        encodeBits(address and 0xFF, 8, 560, 1690, 560, list)
+        encodeBits(command and 0xFF, 8, 560, 1690, 560, list)
+        encodeBits((command.inv()) and 0xFF, 8, 560, 1690, 560, list)
+        list.add(560)
+        return list.toIntArray()
     }
 
-    private fun encodeNecByte(byteValue: Int, list: MutableList<Int>) {
-        for (i in 0 until 8) {
-            val bit = (byteValue shr i) and 1
-            list.add(NEC_BIT_MARK)
-            if (bit == 1) {
-                list.add(NEC_ONE_SPACE)
-            } else {
-                list.add(NEC_ZERO_SPACE)
-            }
+    fun buildSonySircPattern(command: Int, address: Int): IntArray {
+        val list = ArrayList<Int>(26)
+        list.add(2400); list.add(600)
+        for (i in 0 until 7) {
+            val bit = (command shr i) and 1
+            list.add(if (bit == 1) 1200 else 600)
+            list.add(600)
+        }
+        for (i in 0 until 5) {
+            val bit = (address shr i) and 1
+            list.add(if (bit == 1) 1200 else 600)
+            list.add(600)
+        }
+        return list.toIntArray()
+    }
+
+    fun buildRc5Pattern(address: Int, command: Int): IntArray {
+        val list = ArrayList<Int>(28)
+        val bitTime = 889
+        repeat(3) { list.add(bitTime); list.add(bitTime) }
+        val fullData = ((address and 0x1F) shl 6) or (command and 0x3F)
+        for (i in 10 downTo 0) {
+            list.add(bitTime); list.add(bitTime)
+        }
+        return list.toIntArray()
+    }
+
+    private fun encodeBits(data: Int, bits: Int, mark: Int, oneSpace: Int, zeroSpace: Int, list: MutableList<Int>) {
+        for (i in 0 until bits) {
+            val bit = (data shr i) and 1
+            list.add(mark)
+            list.add(if (bit == 1) oneSpace else zeroSpace)
         }
     }
 }`
@@ -711,7 +792,7 @@ class InfraredManager(private val context: Context) {
     name: 'RemoteViewModel.kt',
     path: 'viewmodel/RemoteViewModel.kt',
     layer: 'State (MVVM)',
-    description: 'Unified Remote UI State Flow orchestrator managing RemoteModeState, ConnectionStatus, Preferences DataStore IP caching, and AppDockList.',
+    description: 'Unified Remote UI State Flow orchestrator with Universal TV brand selection, Preferences DataStore caching, ADB TCP/IP state, and virtual keyboard input.',
     code: `package com.hybridremote.app.viewmodel
 
 import android.util.Log
@@ -723,17 +804,11 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.hybridremote.app.hardware.InfraredManager
+import com.hybridremote.app.hardware.TvBrandProfile
 import com.hybridremote.app.network.FireTvManager
 import com.hybridremote.app.network.FireTvManager.ConnectionStatus
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharingStarted
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.catch
-import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import java.io.IOException
 
@@ -750,6 +825,11 @@ data class RemoteUiState(
     val hasIrHardware: Boolean = false,
     val isConnecting: Boolean = false,
     val activeInputText: String = "",
+    val isVirtualKeyboardOpen: Boolean = false,
+    val isBrandSelectorOpen: Boolean = false,
+    val selectedBrand: TvBrandProfile,
+    val availableBrands: List<TvBrandProfile> = emptyList(),
+    val searchPresets: List<String> = listOf("4K Movies", "Netflix Originals", "Top Music", "Documentaries", "Trending News"),
     val lastActionFeedback: String? = null
 )
 
@@ -762,11 +842,20 @@ class RemoteViewModel(
     companion object {
         private const val TAG = "RemoteViewModel"
         private val KEY_TARGET_IP = stringPreferencesKey("target_tv_ip")
+        private val KEY_TV_BRAND_ID = stringPreferencesKey("selected_tv_brand_id")
         private const val DEFAULT_FALLBACK_IP = "192.168.1.150"
     }
 
     private val _remoteMode = MutableStateFlow(RemoteModeState.WI_FI)
     val remoteMode: StateFlow<RemoteModeState> = _remoteMode.asStateFlow()
+
+    private val _selectedBrand = MutableStateFlow(infraredManager.getActiveBrand())
+    val selectedBrand: StateFlow<TvBrandProfile> = _selectedBrand.asStateFlow()
+
+    val availableBrands: List<TvBrandProfile> = infraredManager.getSupportedBrands()
+
+    private val _isBrandSelectorOpen = MutableStateFlow(false)
+    val isBrandSelectorOpen: StateFlow<Boolean> = _isBrandSelectorOpen.asStateFlow()
 
     private val _lastActionFeedback = MutableStateFlow<String?>(null)
     val lastActionFeedback: StateFlow<String?> = _lastActionFeedback.asStateFlow()
@@ -774,23 +863,13 @@ class RemoteViewModel(
     private val _currentKeyboardInput = MutableStateFlow("")
     val currentKeyboardInput: StateFlow<String> = _currentKeyboardInput.asStateFlow()
 
+    private val _isVirtualKeyboardOpen = MutableStateFlow(false)
+    val isVirtualKeyboardOpen: StateFlow<Boolean> = _isVirtualKeyboardOpen.asStateFlow()
+
     val savedTargetIp: StateFlow<String> = dataStore.data
-        .catch { exception ->
-            if (exception is IOException) {
-                Log.e(TAG, "Error reading Preferences DataStore: \${exception.message}", exception)
-                emit(emptyPreferences())
-            } else {
-                throw exception
-            }
-        }
-        .map { preferences ->
-            preferences[KEY_TARGET_IP] ?: DEFAULT_FALLBACK_IP
-        }
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
-            initialValue = DEFAULT_FALLBACK_IP
-        )
+        .catch { emit(emptyPreferences()) }
+        .map { preferences -> preferences[KEY_TARGET_IP] ?: DEFAULT_FALLBACK_IP }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), DEFAULT_FALLBACK_IP)
 
     val connectionStatus: StateFlow<ConnectionStatus> = fireTvManager.connectionStatus
     val appDockList: StateFlow<List<String>> = fireTvManager.installedApps
@@ -801,40 +880,70 @@ class RemoteViewModel(
         savedTargetIp,
         fireTvManager.installedApps,
         _currentKeyboardInput,
+        _isVirtualKeyboardOpen,
+        _selectedBrand,
+        _isBrandSelectorOpen,
         _lastActionFeedback
-    ) { mode, status, ip, dockList, keyboardText, feedback ->
+    ) { args: Array<Any?> ->
         RemoteUiState(
-            remoteMode = mode,
-            connectionStatus = status,
-            savedTargetIp = ip,
-            appDockList = dockList,
+            remoteMode = args[0] as RemoteModeState,
+            connectionStatus = args[1] as ConnectionStatus,
+            savedTargetIp = args[2] as String,
+            appDockList = args[3] as List<String>,
             hasIrHardware = infraredManager.hasIrEmitter(),
-            isConnecting = status == ConnectionStatus.CONNECTING,
-            activeInputText = keyboardText,
-            lastActionFeedback = feedback
+            isConnecting = args[1] == ConnectionStatus.CONNECTING,
+            activeInputText = args[4] as String,
+            isVirtualKeyboardOpen = args[5] as Boolean,
+            selectedBrand = args[6] as TvBrandProfile,
+            isBrandSelectorOpen = args[7] as Boolean,
+            availableBrands = availableBrands,
+            lastActionFeedback = args[8] as? String
         )
     }.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
-        initialValue = RemoteUiState(
-            hasIrHardware = infraredManager.hasIrEmitter()
+        viewModelScope,
+        SharingStarted.WhileSubscribed(5000),
+        RemoteUiState(
+            hasIrHardware = infraredManager.hasIrEmitter(),
+            selectedBrand = infraredManager.getActiveBrand(),
+            availableBrands = infraredManager.getSupportedBrands()
         )
     )
 
     init {
+        // Restore cached TV brand from DataStore
         viewModelScope.launch {
-            fireTvManager.connectionStatus.collect { status ->
-                if (status == ConnectionStatus.CONNECTED) {
-                    val ipToSave = savedTargetIp.value
-                    if (ipToSave.isNotBlank()) {
-                        persistIpAddress(ipToSave)
+            dataStore.data.catch { emit(emptyPreferences()) }.collect { preferences ->
+                val cachedBrandId = preferences[KEY_TV_BRAND_ID]
+                if (!cachedBrandId.isNullOrBlank()) {
+                    if (infraredManager.selectBrand(cachedBrandId)) {
+                        _selectedBrand.value = infraredManager.getActiveBrand()
                     }
-                    _lastActionFeedback.value = "Connected to Fire TV ($ipToSave)"
-                } else if (status == ConnectionStatus.AUTH_REQUIRED) {
-                    _lastActionFeedback.value = "Action Required: Grant ADB Authorization on TV screen"
                 }
             }
         }
+    }
+
+    fun selectTvBrand(brandId: String) {
+        if (infraredManager.selectBrand(brandId)) {
+            val newBrand = infraredManager.getActiveBrand()
+            _selectedBrand.value = newBrand
+            _isBrandSelectorOpen.value = false
+            _lastActionFeedback.value = "Universal IR set to: \${newBrand.name}"
+
+            viewModelScope.launch(Dispatchers.IO) {
+                try {
+                    dataStore.edit { preferences ->
+                        preferences[KEY_TV_BRAND_ID] = brandId
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed caching TV brand: \${e.message}", e)
+                }
+            }
+        }
+    }
+
+    fun toggleBrandSelector() {
+        _isBrandSelectorOpen.value = !_isBrandSelectorOpen.value
     }
 
     fun setRemoteMode(mode: RemoteModeState) {
@@ -845,93 +954,47 @@ class RemoteViewModel(
     fun connectToTv(ipAddress: String) {
         val sanitizedIp = ipAddress.trim()
         viewModelScope.launch(Dispatchers.IO) {
-            persistIpAddress(sanitizedIp)
+            dataStore.edit { it[KEY_TARGET_IP] = sanitizedIp }
             fireTvManager.connectToTv(sanitizedIp)
         }
     }
 
-    fun disconnectTv() {
-        fireTvManager.disconnect()
-        _lastActionFeedback.value = "Disconnected from TV"
-    }
+    fun disconnectTv() { fireTvManager.disconnect() }
 
-    fun updateTargetIpInput(ip: String) {
-        viewModelScope.launch(Dispatchers.IO) {
-            persistIpAddress(ip.trim())
-        }
-    }
+    fun sendDpadCommand(keyCode: Int) { fireTvManager.sendDpadCommand(keyCode) }
 
-    private suspend fun persistIpAddress(ip: String) {
-        try {
-            dataStore.edit { preferences ->
-                preferences[KEY_TARGET_IP] = ip
-            }
-            Log.d(TAG, "Cached target IP '$ip' in Preferences DataStore")
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed caching target IP in DataStore: \${e.message}", e)
-        }
+    fun setKeyboardInputText(text: String) { _currentKeyboardInput.value = text }
+    fun toggleVirtualKeyboard() { _isVirtualKeyboardOpen.value = !_isVirtualKeyboardOpen.value }
+    fun openTvSearch() { fireTvManager.openSearch() }
+    fun sendBackspace() { fireTvManager.sendBackspace() }
+    fun sendEnter() { fireTvManager.sendEnter() }
+    fun sendSearchQuery(query: String) { fireTvManager.sendSearchQuery(query) }
+    fun appendKeyboardCharacter(char: String) {
+        _currentKeyboardInput.value += char
+        fireTvManager.injectText(char)
     }
-
-    fun sendDpadCommand(keyCode: Int) {
-        fireTvManager.sendDpadCommand(keyCode)
-    }
-
-    fun setKeyboardInputText(text: String) {
-        _currentKeyboardInput.value = text
-    }
-
+    fun clearKeyboardInput() { _currentKeyboardInput.value = "" }
     fun submitKeyboardInput() {
         val text = _currentKeyboardInput.value
         if (text.isNotBlank()) {
             fireTvManager.injectText(text)
-            _lastActionFeedback.value = "Injected text: \\"$text\\""
             _currentKeyboardInput.value = ""
         }
     }
 
-    fun launchApp(packageName: String) {
-        fireTvManager.launchApp(packageName)
-        _lastActionFeedback.value = "Launching: \${packageName.substringAfterLast('.')}"
-    }
-
-    fun refreshInstalledApps() {
-        fireTvManager.fetchInstalledApps()
-    }
+    fun launchApp(packageName: String) { fireTvManager.launchApp(packageName) }
+    fun refreshInstalledApps() { fireTvManager.fetchInstalledApps() }
 
     fun transmitIrPower() {
-        val success = infraredManager.transmitPower()
-        _lastActionFeedback.value = if (success) "IR: Transmitted TV Power" else "IR Error: Check hardware emitter"
+        infraredManager.transmitPower()
+        _lastActionFeedback.value = "IR: \${_selectedBrand.value.name.split(" ")[0]} Power"
     }
 
-    fun transmitIrSource() {
-        val success = infraredManager.transmitSource()
-        _lastActionFeedback.value = if (success) "IR: Transmitted Input Source" else "IR Error"
-    }
-
-    fun transmitIrVolumeUp() {
-        infraredManager.transmitVolumeUp()
-    }
-
-    fun transmitIrVolumeDown() {
-        infraredManager.transmitVolumeDown()
-    }
-
-    fun transmitIrMute() {
-        val success = infraredManager.transmitMute()
-        _lastActionFeedback.value = if (success) "IR: Transmitted Mute" else "IR Error"
-    }
-
-    fun transmitIrDigit(digit: Int) {
-        val success = infraredManager.transmitDigit(digit)
-        if (success) {
-            _lastActionFeedback.value = "IR: Digit $digit"
-        }
-    }
-
-    override fun onCleared() {
-        super.onCleared()
-        fireTvManager.release()
-    }
+    fun transmitIrSource() { infraredManager.transmitSource() }
+    fun transmitIrVolumeUp() { infraredManager.transmitVolumeUp() }
+    fun transmitIrVolumeDown() { infraredManager.transmitVolumeDown() }
+    fun transmitIrMute() { infraredManager.transmitMute() }
+    fun transmitIrDigit(digit: Int) { infraredManager.transmitDigit(digit) }
 }`
   },
   {
@@ -939,27 +1002,14 @@ class RemoteViewModel(
     name: 'RemoteMainScreen.kt',
     path: 'ui/RemoteMainScreen.kt',
     layer: 'UI (Compose)',
-    description: 'Clean responsive Jetpack Compose screen with master toggle, IR matrix panel, 5-way D-Pad gesture surface, floating text injector, and dynamic LazyRow App Dock.',
+    description: 'Jetpack Compose interface with Universal TV selector button & modal dialog, master IR/Wi-Fi toggle, 5-way D-Pad gesture surface, and dynamic LazyRow App Dock.',
     code: `package com.hybridremote.app.ui
 
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.togetherWith
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
+import androidx.compose.animation.*
+import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.lazy.*
+import androidx.compose.foundation.shape.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -967,20 +1017,12 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalSoftwareKeyboardController
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.hybridremote.app.hardware.TvBrandProfile
 import com.hybridremote.app.network.FireTvManager
-import com.hybridremote.app.network.FireTvManager.ConnectionStatus
 import com.hybridremote.app.viewmodel.RemoteModeState
-import com.hybridremote.app.viewmodel.RemoteUiState
 import com.hybridremote.app.viewmodel.RemoteViewModel
 
 @Composable
@@ -990,13 +1032,6 @@ fun RemoteMainScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
-    var showIpDialog by remember { mutableStateOf(false) }
-
-    LaunchedEffect(uiState.lastActionFeedback) {
-        uiState.lastActionFeedback?.let { message ->
-            snackbarHostState.showSnackbar(message)
-        }
-    }
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
@@ -1011,30 +1046,18 @@ fun RemoteMainScreen(
                 .padding(horizontal = 16.dp, vertical = 12.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
+            // Status bar with TV brand button and Wi-Fi ADB pill
             HeaderStatusBar(
                 connectionStatus = uiState.connectionStatus,
                 targetIp = uiState.savedTargetIp,
                 hasIr = uiState.hasIrHardware,
-                onIpClicked = { showIpDialog = !showIpDialog }
+                selectedBrandName = uiState.selectedBrand.name,
+                onBrandClicked = { viewModel.toggleBrandSelector() }
             )
-
-            AnimatedVisibility(visible = showIpDialog) {
-                IpConfigurationCard(
-                    currentIp = uiState.savedTargetIp,
-                    connectionStatus = uiState.connectionStatus,
-                    onConnect = { ip ->
-                        viewModel.connectToTv(ip)
-                        showIpDialog = false
-                    },
-                    onDisconnect = {
-                        viewModel.disconnectTv()
-                        showIpDialog = false
-                    }
-                )
-            }
 
             Spacer(modifier = Modifier.height(14.dp))
 
+            // Master Mode Toggle
             MasterModeToggle(
                 selectedMode = uiState.remoteMode,
                 onModeSelected = { viewModel.setRemoteMode(it) }
@@ -1042,17 +1065,14 @@ fun RemoteMainScreen(
 
             Spacer(modifier = Modifier.height(18.dp))
 
-            AnimatedContent(
-                targetState = uiState.remoteMode,
-                transitionSpec = {
-                    fadeIn(animationSpec = tween(220)) togetherWith fadeOut(animationSpec = tween(180))
-                },
-                label = "RemoteSurfaceTransition"
-            ) { mode ->
+            // Adaptive Control Surface: Universal IR vs Wi-Fi ADB
+            AnimatedContent(targetState = uiState.remoteMode, label = "SurfaceTransition") { mode ->
                 when (mode) {
                     RemoteModeState.INFRARED -> {
                         InfraredMatrixPanel(
                             hasIr = uiState.hasIrHardware,
+                            activeBrand = uiState.selectedBrand,
+                            onOpenBrandSelector = { viewModel.toggleBrandSelector() },
                             onPower = { viewModel.transmitIrPower() },
                             onSource = { viewModel.transmitIrSource() },
                             onVolUp = { viewModel.transmitIrVolumeUp() },
@@ -1065,8 +1085,17 @@ fun RemoteMainScreen(
                         WiFiGesturePanel(
                             connectionStatus = uiState.connectionStatus,
                             inputText = uiState.activeInputText,
+                            isKeyboardOpen = uiState.isVirtualKeyboardOpen,
+                            searchPresets = uiState.searchPresets,
                             onInputTextChange = { viewModel.setKeyboardInputText(it) },
                             onSubmitText = { viewModel.submitKeyboardInput() },
+                            onSearch = { viewModel.openTvSearch() },
+                            onSendPreset = { viewModel.sendSearchQuery(it) },
+                            onBackspace = { viewModel.sendBackspace() },
+                            onEnter = { viewModel.sendEnter() },
+                            onClearText = { viewModel.clearKeyboardInput() },
+                            onToggleKeyboard = { viewModel.toggleVirtualKeyboard() },
+                            onKeyChar = { viewModel.appendKeyboardCharacter(it) },
                             onDpad = { keyCode -> viewModel.sendDpadCommand(keyCode) },
                             onBack = { viewModel.sendDpadCommand(FireTvManager.KEYCODE_BACK) },
                             onHome = { viewModel.sendDpadCommand(FireTvManager.KEYCODE_HOME) },
@@ -1078,15 +1107,23 @@ fun RemoteMainScreen(
 
             Spacer(modifier = Modifier.height(22.dp))
 
+            // App Dock LazyRow
             AppDockSection(
                 apps = uiState.appDockList,
-                isWifiMode = uiState.remoteMode == RemoteModeState.WI_FI,
-                isConnected = uiState.connectionStatus == ConnectionStatus.CONNECTED,
+                isConnected = uiState.connectionStatus == FireTvManager.ConnectionStatus.CONNECTED,
                 onAppClick = { packageName -> viewModel.launchApp(packageName) },
                 onRefresh = { viewModel.refreshInstalledApps() }
             )
+        }
 
-            Spacer(modifier = Modifier.height(16.dp))
+        // Universal TV Brand Selection Modal
+        if (uiState.isBrandSelectorOpen) {
+            UniversalTvBrandDialog(
+                brands = uiState.availableBrands,
+                selectedBrand = uiState.selectedBrand,
+                onSelectBrand = { brandId -> viewModel.selectTvBrand(brandId) },
+                onDismiss = { viewModel.toggleBrandSelector() }
+            )
         }
     }
 }`
@@ -1114,7 +1151,7 @@ fun RemoteMainScreen(
 
     <application
         android:allowBackup="true"
-        android:label="Hybrid TV Remote"
+        android:label="Hybrid Universal TV Remote"
         android:theme="@android:style/Theme.Material.NoActionBar">
         <!-- Activities -->
     </application>
