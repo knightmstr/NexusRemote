@@ -52,7 +52,7 @@ All protocols implement the asynchronous `DeviceController` interface, completel
   - Directional DPAD commands, media control, and keyboard synchronization.
 - **Universal Consumer IR (Infrared Blaster)**:
   - Uses `android.hardware.ConsumerIrManager` for phones with physical IR diodes.
-  - **No-Assumption Hardware Check**: Dynamically queries `hasIrEmitter()` at runtime (safely handles devices like the HONOR Magic V5 where IR hardware presence depends on the exact model variant).
+  - **No-Assumption Hardware Check**: Dynamically queries `hasIrEmitter()` at runtime to verify hardware presence on the host device.
   - Built-in carrier frequency and waveform databases for 10 major TV brands (Samsung, LG, Sony, Vizio, TCL, Hisense, Philips, Panasonic, Sharp, Toshiba) using 36 kHz, 38 kHz, and 40 kHz NEC/RC-5/SIRC pulse modulations.
 
 ### 2. Zero Dead Buttons (Capability-Driven UI)
@@ -80,15 +80,15 @@ All protocols implement the asynchronous `DeviceController` interface, completel
 - **Per-Device AES-256-GCM Keys & Cryptographic Erasure**: Each saved device receives a unique `nexus_key_$deviceId` in Android Keystore. Deleting a device triggers `keyStore.deleteEntry()`, executing **true cryptographic erasure**.
 - **Additional Authenticated Data (AAD) Label Binding**: Encrypted secrets bind `"${deviceId}::${secretKeyName}"` as AAD via `cipher.updateAAD()` to defeat cross-device ciphertext translocation.
 - **StrongBox HSM & Unlocked Device Requirement**: Configures `.setUnlockedDeviceRequired(true)` (API 28+) and attempts `.setIsStrongBoxBacked(true)` with a graceful fallback to standard TEE.
-- **Trust-On-First-Use (TOFU) TLS Certificate Pinning (`TofuTrustManager.kt`)**: Computes and pins SHA-256 leaf certificate fingerprints on initial pairing for Smart TV TLS endpoints (Samsung Tizen WSS 8002, LG webOS WSS 3001, Hisense VIDAA SSL 5000, Android TV Remote v2 TLS 6467), blocking Man-in-the-Middle (MitM) attacks on local networks.
+- **Trust-On-First-Use (TOFU) TLS Certificate Pinning (`TofuTrustManager.kt`)**: Computes and pins SHA-256 leaf certificate fingerprints on initial pairing for Smart TV TLS endpoints (Samsung Tizen WSS 8002, LG webOS WSS 3001, Hisense VIDAA SSL 5000, Android TV Remote v2 TLS 6467), blocking Man-in-the-Middle (MitM) attacks.
 - **Input Sanitization & Allowlisting**: Enforces strict allowlist regex (`^[a-zA-Z0-9._]+$`) on package names passed to app launchers and restricts keyevents strictly to standard Android `KeyEvent.KEYCODE_*` integers.
 - **Backup & Network Security Rules**: `android:allowBackup="false"`, `dataExtractionRules`, and `fullBackupContent` excluding Room DB and vaults; `network_security_config.xml` enforcing `cleartextTrafficPermitted="false"` globally.
 
 ### 6. Adaptive Jetpack Compose UI (Foldable & Phone)
-- **HONOR Magic V5 & Foldable Support**:
+- **Foldable & Tablet Responsive Layout**:
   - Automatically adapts via `BoxWithConstraints`:
   - **Cover Screen / Folded Phone (`< 600dp`)**: Renders an ergonomic, single-column thumb-reachable remote.
-  - **Unfolded Inner Screen (`>= 600dp`)**: Unlocks a split-screen dual-pane console:
+  - **Unfolded Inner Screen / Tablet (`>= 600dp`)**: Unlocks a split-screen dual-pane console:
     - *Left Pane*: Master power, brand badge, source, 5-way D-Pad, Volume/Channel rocker, and media playback.
     - *Right Pane*: Swipeable touchpad surface, floating keyboard text injector, installed app dock, and macro buttons.
 - **Haptic Engine & Hold-to-Repeat**: Configurable 500ms initial repeat delay, 80ms interval, and tactile feedback on button presses.
@@ -105,13 +105,13 @@ All protocols implement the asynchronous `DeviceController` interface, completel
 
 ### Prerequisites
 - **Android Phone**: Android 8.0+ (API 26+) minimum; Android 14+ (API 34) recommended.
-- **Foldable Phones (including HONOR Magic V5)**: Fully supported on both cover and unfolded screens.
+- **Form Factors**: Fully supported on standard smartphones, foldables, and tablets.
 - **PC / Mac**: Android Studio Jellyfish / Koala or Android SDK Platform-Tools installed.
 - **Local Network**: Phone and TV must be connected to the same Wi-Fi router/subnet (disable AP Client Isolation on router).
 
 ---
 
-### Step 1: Install on Physical Android Phone (Including HONOR Magic V5)
+### Step 1: Install on Physical Android Phone
 
 1. **Enable Developer Options & USB Debugging on Your Phone**:
    - Open **Settings** → **About Phone**.
@@ -128,8 +128,6 @@ All protocols implement the asynchronous `DeviceController` interface, completel
    cd android
    ./gradlew installDebug
    ```
-4. **HONOR Magic V5 App Display Settings**:
-   - On the HONOR Magic V5, go to **Settings** → **Display & Brightness** → **App Display Mode** → Select **NexusRemote** → Choose **Full Screen**. This ensures seamless continuity when opening and closing the foldable screen.
 
 ---
 
@@ -251,12 +249,12 @@ npm run dev
 │               │   ├── HisenseVidaaAdapter.kt  # Hisense VIDAA SSL TCP 5000 with TOFU TLS
 │               │   ├── PanasonicAdapter.kt     # Panasonic Viera UPnP SOAP 55000
 │               │   ├── AndroidTvRemoteAdapter.kt # Google Android TV Remote v2 TLS 6467 with TOFU TLS
-│               │   ├── ConsumerIrAdapter.kt    # ConsumerIrManager with Magic V5 check & brand DB
+│               │   ├── ConsumerIrAdapter.kt    # ConsumerIrManager with hardware detection & brand DB
 │               │   └── ProtocolRegistry.kt     # Factory mapping SavedDevice to Protocol Adapter
 │               ├── viewmodel/
 │               │   └── NexusViewModels.kt      # DeviceManagementViewModel & RemoteControlViewModel
 │               └── ui/
-│                   └── NexusMainScreen.kt      # Jetpack Compose UI with Foldable Dual-Pane support
+│                   └── NexusMainScreen.kt      # Jetpack Compose UI with Foldable & Tablet Dual-Pane support
 └── src/                                        # Web Simulation Companion & Code Studio
     ├── App.tsx                                 # Companion app container
     ├── components/                             # RemoteControl, TvSimulator, LogcatConsole, CodeViewer

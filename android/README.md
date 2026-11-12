@@ -42,14 +42,14 @@ android/app/src/main/
     │   ├── HisenseVidaaAdapter.kt   # Hisense VIDAA SSL TCP / RemoteNOW (5000) with TOFU TLS
     │   ├── PanasonicAdapter.kt      # Panasonic Viera UPnP SOAP (55000)
     │   ├── AndroidTvRemoteAdapter.kt  # Google Android TV Remote v2 TLS (6467) with TOFU TLS
-    │   ├── ConsumerIrAdapter.kt     # ConsumerIrManager with Magic V5 detection & brand DB
+    │   ├── ConsumerIrAdapter.kt     # ConsumerIrManager with hardware detection & brand DB
     │   └── ProtocolRegistry.kt      # Factory mapping SavedDevice to Protocol Adapter
     │
     ├── viewmodel/
     │   └── NexusViewModels.kt       # DeviceManagementViewModel & RemoteControlViewModel
     │
     └── ui/
-        └── NexusMainScreen.kt       # Jetpack Compose UI with Foldable Dual-Pane (HONOR Magic V5)
+        └── NexusMainScreen.kt       # Jetpack Compose UI with Foldable & Tablet Dual-Pane
 ```
 
 ---
@@ -63,7 +63,7 @@ NexusRemote enforces strict cryptographic security and OWASP MASVS standards:
 - **Native 524-Byte ADB `RSAPublicKey` Struct & `NONEwithRSA` Token Signing**: Formats public keys into the native 524-byte AOSP `RSAPublicKey` C-struct format (`len` = 64, `n0inv`, `n[64]`, `rr[64]`) and signs 20-byte `A_AUTH` token challenges using `NONEwithRSA` with a pre-built 15-byte SHA-1 ASN.1 `DigestInfo` header.
 - **Trust-On-First-Use (TOFU) TLS Certificate Pinning (`TofuTrustManager.kt`)**: Computes and pins SHA-256 leaf certificate fingerprints on initial pairing for Smart TV TLS endpoints (Samsung Tizen WSS 8002, LG webOS WSS 3001, Hisense VIDAA SSL 5000, Android TV Remote v2 TLS 6467), blocking Man-in-the-Middle (MitM) attacks.
 - **Plaintext Fallback Protection**: Unencrypted WS fallback (`8001` or `3000`) is rejected unless `SavedDevice.allowPlaintextFallback == true` is explicitly authorized by the user.
-- **Input Sanitization & Allowlisting**:ADB shell execution is restricted to allowlisted regex (`^[a-zA-Z0-9._]+$`) for package names and validated integer Android keycodes (`KeyEvent.KEYCODE_*`).
+- **Input Sanitization & Allowlisting**: ADB shell execution is restricted to allowlisted regex (`^[a-zA-Z0-9._]+$`) for package names and validated integer Android keycodes (`KeyEvent.KEYCODE_*`).
 
 ---
 
@@ -105,14 +105,14 @@ NexusRemote enforces strict cryptographic security and OWASP MASVS standards:
 
 ---
 
-## 📱 Hardware Verification: HONOR Magic V5 & Foldables
+## 📱 Hardware Verification & Adaptive Form Factors
 
 ### Consumer IR Blaster Verification
 - **Dynamic Hardware Check**: NexusRemote explicitly calls `ConsumerIrManager.hasIrEmitter()`.
-- **Zero Assumptions**: NexusRemote **never assumes the HONOR Magic V5 or any device has an IR blaster**. If the hardware emitter is absent, IR mode is automatically hidden, and only Wi-Fi protocol adapters are presented.
+- **Zero Assumptions**: NexusRemote **never assumes any device has an IR blaster**. If the hardware emitter is absent, IR mode is automatically hidden, and only Wi-Fi protocol adapters are presented.
 
 ### Foldable & Tablet Dual-Pane Optimization
-- Tested for foldable smartphones (such as the HONOR Magic V5 unfolded state at `8.0"` display) and Android tablets:
+- Optimized for foldable smartphones and Android tablets:
   - **Expanded / Unfolded (`>= 600dp`)**: Side-by-side dual pane layout.
     - **Left Pane**: Remote navigation, 5-way D-Pad gesture surface, tactile volume & channel rockers.
     - **Right Pane**: Persistent keyboard text injector, touchpad swipe surface, installed app dock, and one-tap macros.
@@ -123,7 +123,7 @@ NexusRemote enforces strict cryptographic security and OWASP MASVS standards:
 ## 🛠️ Installation & Device Setup Guide
 
 ### 1. Installation on a Physical Android Device
-1. Enable **Developer Options** and **USB Debugging** on your phone (e.g. HONOR Magic V5: *Settings > About Phone > Tap 'Build Number' 7 times*).
+1. Enable **Developer Options** and **USB Debugging** on your phone (*Settings > About Phone > Tap 'Build Number' 7 times*).
 2. Connect your phone via USB or build an APK:
    ```bash
    cd android

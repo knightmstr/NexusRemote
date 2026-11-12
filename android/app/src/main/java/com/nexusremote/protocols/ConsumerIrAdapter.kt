@@ -16,7 +16,7 @@ import kotlinx.coroutines.flow.asStateFlow
 /**
  * Universal Hardware Consumer IR Adapter utilizing Android's ConsumerIrManager.
  * Detects hardware availability dynamically.
- * CRITICAL: Never assumes any device (including the HONOR Magic V5) has an IR blaster without
+ * CRITICAL: Never assumes any device has an IR blaster without
  * querying manager.hasIrEmitter().
  *
  * Implements hardware pulse generators for:

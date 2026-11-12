@@ -37,7 +37,7 @@ import com.nexusremote.viewmodel.RemoteControlViewModel
 
 /**
  * Root Adaptive Jetpack Compose Application for NexusRemote.
- * Supports foldable devices (e.g. HONOR Magic V5 unfold state) and tablets
+ * Supports foldable devices and tablets
  * with automatic dual-pane layouts and capability-driven button rendering.
  */
 @Composable
@@ -411,7 +411,7 @@ fun DiscoveryScreen(
 }
 
 /**
- * ADAPTIVE DUAL-PANE REMOTE: Foldable (HONOR Magic V5) and Tablet Layout.
+ * ADAPTIVE DUAL-PANE REMOTE: Foldable and Tablet Layout.
  */
 @Composable
 fun FoldableDualPaneRemote(

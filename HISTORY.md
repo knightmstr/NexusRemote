@@ -77,7 +77,7 @@ This document records the chronological history, engineering decisions, architec
 
 ### Milestone 5: UI & Features Engineering
 - **Jetpack Compose UI (`ui/NexusMainScreen.kt`)**:
-  - **Foldable Dual-Pane Support**: Evaluates window width using `BoxWithConstraints`. Devices with width `>= 600dp` (such as the **HONOR Magic V5** 8.0" unfolded display) render a split-screen console (Navigation/D-Pad on left, Touchpad/Keyboard/Apps/Macros on right). Folded phones render an ergonomic single-column remote.
+  - **Foldable Dual-Pane Support**: Evaluates window width using `BoxWithConstraints`. Devices with width `>= 600dp` (such as unfolded foldable displays and tablets) render a split-screen console (Navigation/D-Pad on left, Touchpad/Keyboard/Apps/Macros on right). Folded phones render an ergonomic single-column remote.
   - **Zero Dead Buttons Engine**: Each UI button queries `activeController.capabilities.contains(DeviceCapability.XYZ)`. Unsupported controls are either cleanly hidden or display clear explanatory notifications (e.g. informing the user that Samsung Tizen does not support background text injection).
   - **Haptic Engine & Hold-to-Repeat**: Pointer input gestures with 500ms initial repeat delay, 80ms interval, and tactile vibration feedback.
   - **Interactive Keyboard Text Injector**: Direct text injection for search dialogs and URL inputs on supported platforms.
@@ -116,7 +116,7 @@ This document records the chronological history, engineering decisions, architec
 | **ADR-002** | Common `DeviceController` Interface | Accepted | Decouples the UI and ViewModel from brand-specific network mechanics. Adding new protocols requires only a new adapter implementation without touching core logic. |
 | **ADR-003** | Capability-Driven UI Rendering | Accepted | Eliminates "dead buttons" by inspecting protocol capabilities at runtime. Users never encounter non-functional controls. |
 | **ADR-004** | Subnet-Bounded Discovery (`/24`) | Accepted | Prevents network security exceptions on Android 12+ and avoids scanning unauthorized or public subnets. |
-| **ADR-005** | No-Assumption IR Hardware Detection | Accepted | The HONOR Magic V5 and modern foldables vary across global hardware revisions. Calling `hasIrEmitter()` prevents runtime crashes on variants without an IR diode. |
+| **ADR-005** | No-Assumption IR Hardware Detection | Accepted | Devices and foldables vary across global hardware revisions. Calling `hasIrEmitter()` prevents runtime crashes on hardware variants without an IR diode. |
 | **ADR-006** | TOFU TLS Certificate Pinning | Accepted | Smart TV local SSL/TLS endpoints often generate self-signed certificates. Trust-On-First-Use pins the leaf SHA-256 fingerprint on pair and blocks MitM interception on subnets. |
 | **ADR-007** | Per-Device AES Keys & AAD Binding | Accepted | Isolated per-device keys enable instant cryptographic erasure upon device deletion, while AAD label binding prevents ciphertext translocation between saved devices. |
 
