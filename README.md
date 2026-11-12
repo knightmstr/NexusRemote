@@ -126,12 +126,29 @@ All protocols implement the asynchronous `DeviceController` interface, completel
 3. **Build and Install Debug APK**:
    ```bash
    cd android
-   ./gradlew installDebug
+   gradle assembleDebug
+   adb install -r app/build/outputs/apk/debug/app-debug.apk
    ```
+   *(Or open the `android/` directory in Android Studio and click **Run**).*
 
 ---
 
-### Step 2: Run the Web Companion & Kotlin Architecture Viewer
+### Step 2: Automated APK Builds via GitHub Actions CI/CD
+
+A GitHub Actions workflow is configured in `.github/workflows/android.yml` to automatically build the debug APK (`app-debug-<version>.apk`) on pushes/PRs to `main` and create GitHub Releases on `v*` tags using Java 17 and Gradle 8.7.
+
+To push an exported project copy to your GitHub repository from your local machine:
+```bash
+git init -b main
+git add .
+git commit -m "chore: configure Android Gradle build and CI/CD pipeline"
+git remote add origin https://github.com/<your-username>/<your-repo>.git
+git push -u origin main
+```
+
+---
+
+### Step 3: Run the Web Companion & Kotlin Architecture Viewer
 
 To explore the interactive TV simulator and inspect the native architecture files in your browser:
 
@@ -216,17 +233,27 @@ npm run dev
 
 ```
 .
+├── .github/workflows/
+│   └── android.yml                             # GitHub Actions CI/CD workflow for APK & Release builds
 ├── HISTORY.md                                  # Complete project chronicle & ADRs
 ├── README.md                                   # This file (features, install & use guide)
 ├── android/                                    # Native Android Project
+│   ├── build.gradle.kts                        # Root Gradle plugins (AGP 8.5.2, Kotlin 2.0.21, Compose)
+│   ├── settings.gradle.kts                     # Repositories & :app module inclusion
+│   ├── gradle.properties                       # JVM heap, AndroidX, non-transitive R class
 │   └── app/
-│       ├── build.gradle.kts                    # Gradle dependencies (Room, DataStore, Compose M3)
+│       ├── build.gradle.kts                    # App dependencies & CI versionCode/versionName properties
+│       ├── proguard-rules.pro                  # ProGuard rules for Room, protocols & security
 │       └── src/main/
 │           ├── AndroidManifest.xml             # OWASP MASVS permissions & network security config
-│           ├── res/xml/
-│           │   ├── backup_rules.xml            # Full backup exclusions for Room & SharedPreferences
-│           │   ├── data_extraction_rules.xml   # Android 12+ cloud/device data extraction rules
-│           │   └── network_security_config.xml # Global cleartextTrafficPermitted=false config
+│           ├── res/
+│           │   ├── drawable/ic_launcher_foreground.xml
+│           │   ├── mipmap-anydpi-v26/          # Adaptive launcher icons
+│           │   ├── values/colors.xml
+│           │   └── xml/
+│           │       ├── backup_rules.xml            # Full backup exclusions for Room, DataStore & Vault
+│           │       ├── data_extraction_rules.xml   # Android 12+ cloud/device data extraction rules
+│           │       └── network_security_config.xml # Global cleartextTrafficPermitted=false config
 │           └── java/com/nexusremote/
 │               ├── MainActivity.kt             # Main entry point
 │               ├── domain/model/

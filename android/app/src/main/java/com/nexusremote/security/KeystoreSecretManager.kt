@@ -96,7 +96,10 @@ class KeystoreSecretManager(private val context: Context) {
             }
         }
 
-        val standardSpec = builder.setIsStrongBoxBacked(false).build()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            builder.setIsStrongBoxBacked(false)
+        }
+        val standardSpec = builder.build()
         keyGenerator.init(standardSpec)
         val key = keyGenerator.generateKey()
         Log.i(TAG, "Generated TEE-backed AES-256 key for device '$deviceId'")
@@ -298,7 +301,10 @@ class KeystoreSecretManager(private val context: Context) {
                 }
             }
 
-            val standardSpec = builder.setIsStrongBoxBacked(false).build()
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                builder.setIsStrongBoxBacked(false)
+            }
+            val standardSpec = builder.build()
             keyPairGenerator.init(standardSpec)
             keyPairGenerator.generateKeyPair()
             Log.i(TAG, "Generated TEE-backed RSA-2048 key pair for ADB authentication")

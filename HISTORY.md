@@ -108,6 +108,14 @@ This document records the chronological history, engineering decisions, architec
 
 ---
 
+### Milestone 8: Gradle Build System & GitHub Actions CI/CD Integration
+- Added root Gradle project configuration (`android/build.gradle.kts`, `android/settings.gradle.kts`, `android/gradle.properties`, `android/app/proguard-rules.pro`) aligned with AGP `8.5.2`, Kotlin `2.0.21`, and Gradle `8.7`.
+- Wired `-PversionCode` and `-PversionName` Gradle properties into `android/app/build.gradle.kts` to support automated versioning from `.github/workflows/android.yml`.
+- Added adaptive vector launcher icon resources (`res/mipmap-anydpi-v26/`, `res/drawable/ic_launcher_foreground.xml`, `res/values/colors.xml`) referenced by `AndroidManifest.xml`.
+- Fixed API 28 (`Build.VERSION_CODES.P`) guards in `KeystoreSecretManager.kt`, synced exact Room/DataStore filenames in backup rules, and resolved legacy `RemoteViewModel.kt` `Flow.combine` compilation issues.
+
+---
+
 ## 📈 Architecture Decision Records (ADRs)
 
 | ADR ID | Decision Title | Status | Rationale |

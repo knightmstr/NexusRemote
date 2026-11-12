@@ -9,6 +9,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.hybridremote.app.hardware.InfraredManager
+import com.hybridremote.app.hardware.TvBrandProfile
 import com.hybridremote.app.network.FireTvManager
 import com.hybridremote.app.network.FireTvManager.ConnectionStatus
 import kotlinx.coroutines.Dispatchers
@@ -45,6 +46,9 @@ data class RemoteUiState(
     val activeInputText: String = "",
     val isVirtualKeyboardOpen: Boolean = false,
     val searchPresets: List<String> = listOf("4K Movies", "Netflix Originals", "Top Music", "Documentaries", "Trending News"),
+    val availableBrands: List<TvBrandProfile> = InfraredManager.UNIVERSAL_BRAND_DATABASE,
+    val selectedBrand: TvBrandProfile = InfraredManager.UNIVERSAL_BRAND_DATABASE.first(),
+    val isBrandSelectorOpen: Boolean = false,
     val lastActionFeedback: String? = null
 )
 
@@ -80,6 +84,10 @@ class RemoteViewModel(
     private val _isVirtualKeyboardOpen = MutableStateFlow(false)
     val isVirtualKeyboardOpen: StateFlow<Boolean> = _isVirtualKeyboardOpen.asStateFlow()
 
+    // Universal TV Brand Selector state
+    private val _selectedBrand = MutableStateFlow(infraredManager.getActiveBrand())
+    private val _isBrandSelectorOpen = MutableStateFlow(false)
+
     // Persistent Target IP from Preferences DataStore
     val savedTargetIp: StateFlow<String> = dataStore.data
         .catch { exception ->
@@ -105,16 +113,39 @@ class RemoteViewModel(
     // Dynamic 3rd-party App Dock List forwarded from FireTvManager StateFlow
     val appDockList: StateFlow<List<String>> = fireTvManager.installedApps
 
-    // Unified UI state flow combining all reactive properties
-    val uiState: StateFlow<RemoteUiState> = combine(
+    // Unified UI state flow combining all reactive properties (nested type-safe combines)
+    private val connectionUiFlow = combine(
         _remoteMode,
         fireTvManager.connectionStatus,
         savedTargetIp,
-        fireTvManager.installedApps,
+        fireTvManager.installedApps
+    ) { mode, status, ip, dockList ->
+        Triple(mode, status, Pair(ip, dockList))
+    }
+
+    private val inputUiFlow = combine(
         _currentKeyboardInput,
         _isVirtualKeyboardOpen,
+        _selectedBrand,
+        _isBrandSelectorOpen,
         _lastActionFeedback
-    ) { mode, status, ip, dockList, keyboardText, isKbdOpen, feedback ->
+    ) { keyboardText, isKbdOpen, brand, isBrandOpen, feedback ->
+        listOf<Any?>(keyboardText, isKbdOpen, brand, isBrandOpen, feedback)
+    }
+
+    val uiState: StateFlow<RemoteUiState> = combine(
+        connectionUiFlow,
+        inputUiFlow
+    ) { conn, input ->
+        val mode = conn.first
+        val status = conn.second
+        val (ip, dockList) = conn.third
+        val keyboardText = input[0] as String
+        val isKbdOpen = input[1] as Boolean
+        val brand = input[2] as TvBrandProfile
+        val isBrandOpen = input[3] as Boolean
+        val feedback = input[4] as String?
+
         RemoteUiState(
             remoteMode = mode,
             connectionStatus = status,
@@ -124,13 +155,18 @@ class RemoteViewModel(
             isConnecting = status == ConnectionStatus.CONNECTING,
             activeInputText = keyboardText,
             isVirtualKeyboardOpen = isKbdOpen,
+            availableBrands = infraredManager.getSupportedBrands(),
+            selectedBrand = brand,
+            isBrandSelectorOpen = isBrandOpen,
             lastActionFeedback = feedback
         )
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
         initialValue = RemoteUiState(
-            hasIrHardware = infraredManager.hasIrEmitter()
+            hasIrHardware = infraredManager.hasIrEmitter(),
+            availableBrands = infraredManager.getSupportedBrands(),
+            selectedBrand = infraredManager.getActiveBrand()
         )
     )
 
@@ -155,6 +191,19 @@ class RemoteViewModel(
     fun setRemoteMode(mode: RemoteModeState) {
         _remoteMode.value = mode
         _lastActionFeedback.value = "Switched to ${mode.name} mode"
+    }
+
+    fun toggleBrandSelector() {
+        _isBrandSelectorOpen.value = !_isBrandSelectorOpen.value
+    }
+
+    fun selectTvBrand(brandId: String) {
+        if (infraredManager.selectBrand(brandId)) {
+            val brand = infraredManager.getActiveBrand()
+            _selectedBrand.value = brand
+            _isBrandSelectorOpen.value = false
+            _lastActionFeedback.value = "Selected IR profile: ${brand.name}"
+        }
     }
 
     // Network / ADB Actions

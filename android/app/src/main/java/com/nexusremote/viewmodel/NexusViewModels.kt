@@ -19,6 +19,7 @@ import com.nexusremote.domain.model.RemoteCommand
 import com.nexusremote.domain.model.SavedDevice
 import com.nexusremote.protocols.DeviceController
 import com.nexusremote.protocols.ProtocolRegistry
+import com.nexusremote.security.KeystoreSecretManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -37,7 +38,8 @@ import kotlinx.coroutines.withContext
 class DeviceManagementViewModel(
     private val deviceDao: DeviceDao,
     private val discoveryManager: NetworkDiscoveryManager,
-    private val devicePreferences: DevicePreferences
+    private val devicePreferences: DevicePreferences,
+    private val keystoreSecretManager: KeystoreSecretManager? = null
 ) : ViewModel() {
 
     companion object {
@@ -118,7 +120,8 @@ class DeviceManagementViewModel(
     fun deleteDevice(device: SavedDevice) {
         viewModelScope.launch(Dispatchers.IO) {
             deviceDao.deleteDevice(device)
-            _activeMessage.value = "Removed '${device.name}'"
+            keystoreSecretManager?.removeDeviceSecrets(device.id)
+            _activeMessage.value = "Removed '${device.name}' and erased device keys"
         }
     }
 
