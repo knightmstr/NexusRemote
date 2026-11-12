@@ -2,6 +2,8 @@
 
 Production-grade, native Android television remote application and modular protocol ecosystem.
 
+> 📜 **Project History & Evolution**: For the full chronological development history, prototype audit, and architecture decision records, see the [Project History Log](../HISTORY.md).
+
 ---
 
 ## 📦 Architecture & Package Structure
