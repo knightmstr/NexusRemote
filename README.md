@@ -4,11 +4,11 @@
 [![Platform](https://img.shields.io/badge/Platform-Android%2014%2B%20(API%2034)-green?style=flat-square)](android/)
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.0-purple?style=flat-square)](android/app/src/main/java/com/nexusremote/)
 [![Jetpack Compose](https://img.shields.io/badge/UI-Jetpack%20Compose%20M3-brightgreen?style=flat-square)](android/app/src/main/java/com/nexusremote/ui/)
-[![Security](https://img.shields.io/badge/Security-Android%20Keystore%20(TEE)-red?style=flat-square)](android/app/src/main/java/com/nexusremote/security/)
+[![Security](https://img.shields.io/badge/OWASP%20MASVS-Hardened-red?style=flat-square)](android/app/src/main/java/com/nexusremote/security/)
 
 NexusRemote is a production-grade, native Android television remote control application and modular protocol ecosystem. It unifies network-connected Smart TVs and traditional IR-controlled appliances behind a single, capability-aware control interface.
 
-> 📜 **Project History**: For a complete chronicle of how this project evolved from its initial prototype audit through each architecture milestone, see the [Project History & Evolution Log](HISTORY.md).
+> 📜 **Project History**: For a complete chronicle of how this project evolved from its initial prototype audit through each architecture milestone and security hardening refactoring, see the [Project History & Evolution Log](HISTORY.md).
 
 ---
 
@@ -19,34 +19,36 @@ All protocols implement the asynchronous `DeviceController` interface, completel
 
 - **Amazon Fire TV & Android TV (ADB over TCP/IP)**:
   - Real TCP socket communication on port `5555`.
-  - Genuine RSA-2048 token challenge signing using Android Keystore private key (`SHA256withRSA`).
-  - Keyevent dispatching, shell command execution, dynamic third-party package listing (`pm list packages -3`), and direct app launching (`monkey -p`).
+  - Native 524-byte `RSAPublicKey` struct formatting and hardware-backed `NONEwithRSA` token challenge signing with SHA-1 ASN.1 DigestInfo prefix.
+  - Keyevent dispatching, shell command execution, dynamic third-party package listing (`pm list packages -3`), and direct app launching (`monkey -p`) protected by strict input allowlists.
 - **Roku (External Control Protocol - ECP)**:
   - REST client communicating via HTTP on port `8060`.
   - Real `/keypress/` and `/keydown/` / `/keyup/` commands.
   - Installed channel querying via XML endpoint (`/query/apps`) and instant app launching (`/launch/<appId>`).
   - Text input injection through `/keypress/Lit_<char>`.
 - **Samsung Tizen Smart TV**:
-  - Secure WebSocket communication on ports `8001` (plain) and `8002` (SSL).
-  - Base64-encoded handshake payload with persistent authorization token caching.
+  - Secure WSS WebSocket communication on port `8002` with **Trust-On-First-Use (TOFU) TLS certificate pinning**.
+  - User-consented fallback protection to unencrypted WS (port `8001`).
+  - Base64-encoded handshake payload with persistent authorization token caching in Keystore.
   - Directional navigation, media playback controls, and volume commands.
 - **LG webOS Smart TV**:
-  - SSAP WebSocket client on ports `3000` and `3001` (WSS).
+  - SSAP WSS WebSocket client on port `3001` with **TOFU TLS certificate pinning**.
+  - User-consented fallback protection to unencrypted WS (port `3000`).
   - Registration handshake with on-screen TV approval dialog and persistent `client-key` encryption.
   - Full volume control, media keys, installed app discovery (`ssap://com.webos.applicationManager/listApps`), and text insertion (`ssap://com.webos.service.ime/insertText`).
 - **Sony BRAVIA TV**:
   - Dual HTTP JSON-RPC and IRCC-IP SOAP command execution on port `80` / `8080`.
-  - Secure Pre-Shared Key (PSK) authentication.
+  - Secure Pre-Shared Key (PSK) authentication encrypted in Android Keystore.
   - Power status control, directional navigation, and input source switching.
 - **Hisense VIDAA OS**:
-  - Encrypted SSL TCP communication on port `5000` (RemoteNOW protocol).
+  - Encrypted SSL TCP communication on port `5000` (RemoteNOW protocol) with **TOFU TLS certificate pinning**.
   - 4-digit on-screen PIN pairing challenge.
   - Directional navigation, volume rockers, and media playback control.
 - **Panasonic Viera TV**:
   - UPnP SOAP client on HTTP port `55000` (`urn:panasonic-com:service:p00NetworkControl:1`).
   - Native keycode mapping (`NRC_POWER-ONOFF`, `NRC_UP-ONOFF`, `NRC_VOLUP-ONOFF`, etc.).
 - **Google Android TV Remote v2**:
-  - TLS socket on port `6467` with mTLS certificate exchange.
+  - TLS socket on port `6467` with **TOFU TLS certificate pinning** and mTLS certificate exchange.
   - Directional DPAD commands, media control, and keyboard synchronization.
 - **Universal Consumer IR (Infrared Blaster)**:
   - Uses `android.hardware.ConsumerIrManager` for phones with physical IR diodes.
@@ -59,6 +61,7 @@ All protocols implement the asynchronous `DeviceController` interface, completel
 
 ### 3. Local Network Discovery
 - **Subnet-Bounded Scanning**: Calculates the active subnet mask from `WifiManager.connectionInfo.ipAddress` (e.g. `192.168.1.0/24`). Never scans unauthorized or public subnets.
+- **Location Permission Scoping**: Supports fine location for subnet discovery on Android 8.0–12 (`maxSdkVersion="32"`) while preserving location-free discovery on Android 13+ via `NEARBY_WIFI_DEVICES`.
 - **mDNS (`NsdManager`)**: Listens for `_androidtvremote2._tcp`, `_adb-tls-connect._tcp`, and `_roku._tcp`.
 - **SSDP Multicast (Port 1900)**: Transmits `M-SEARCH * HTTP/1.1` to detect UPnP MediaRenderers, Roku ECP, and Sony IRCC endpoints.
 - **Manual IP Entry & Port Probe**: Direct connection entry with automatic port reachability checks.
@@ -66,16 +69,20 @@ All protocols implement the asynchronous `DeviceController` interface, completel
 ### 4. Saved Devices & Persistent Database (Room)
 - **Room Database (`NexusDatabase`)**:
   - `SavedDevice` entity persists device ID, custom name, brand, model, protocol type, IP address, port, MAC address, room, favorites flag, default TV flag, and last-connected timestamp.
+  - Excluded from cloud/device backups via `data_extraction_rules.xml` and `backup_rules.xml`.
   - Survives app restarts, device reboots, and operating system updates.
   - Full CRUD management: add, edit IP, rename, delete, assign rooms, toggle favorites, and set default TV.
 - **Lightweight Connection Monitoring & Smart Reconnect**:
   - Performs a single, lightweight 500ms socket probe on the saved IP when the app opens.
   - Full subnet discovery is only triggered if the target device's IP address has changed via DHCP, conserving battery.
 
-### 5. Hardware-Backed Security (Android Keystore)
-- **Zero Plaintext Credentials**: All pairing tokens, webOS client-keys, Sony PSKs, and PINs are encrypted via **AES-256 GCM** generated inside the `AndroidKeyStore` provider.
-- **Secure Element RSA-2048 Signing**: An RSA-2048 keypair generated in the Keystore computes digital signatures directly within the phone's Trusted Execution Environment (TEE) / StrongBox for ADB authentication challenges.
-- **Cryptographic Erasure**: Deleting a device immediately destroys its cryptographic keys.
+### 5. OWASP MASVS & Hardware-Backed Security (Android Keystore)
+- **Per-Device AES-256-GCM Keys & Cryptographic Erasure**: Each saved device receives a unique `nexus_key_$deviceId` in Android Keystore. Deleting a device triggers `keyStore.deleteEntry()`, executing **true cryptographic erasure**.
+- **Additional Authenticated Data (AAD) Label Binding**: Encrypted secrets bind `"${deviceId}::${secretKeyName}"` as AAD via `cipher.updateAAD()` to defeat cross-device ciphertext translocation.
+- **StrongBox HSM & Unlocked Device Requirement**: Configures `.setUnlockedDeviceRequired(true)` (API 28+) and attempts `.setIsStrongBoxBacked(true)` with a graceful fallback to standard TEE.
+- **Trust-On-First-Use (TOFU) TLS Certificate Pinning (`TofuTrustManager.kt`)**: Computes and pins SHA-256 leaf certificate fingerprints on initial pairing for Smart TV TLS endpoints (Samsung Tizen WSS 8002, LG webOS WSS 3001, Hisense VIDAA SSL 5000, Android TV Remote v2 TLS 6467), blocking Man-in-the-Middle (MitM) attacks on local networks.
+- **Input Sanitization & Allowlisting**: Enforces strict allowlist regex (`^[a-zA-Z0-9._]+$`) on package names passed to app launchers and restricts keyevents strictly to standard Android `KeyEvent.KEYCODE_*` integers.
+- **Backup & Network Security Rules**: `android:allowBackup="false"`, `dataExtractionRules`, and `fullBackupContent` excluding Room DB and vaults; `network_security_config.xml` enforcing `cleartextTrafficPermitted="false"` globally.
 
 ### 6. Adaptive Jetpack Compose UI (Foldable & Phone)
 - **HONOR Magic V5 & Foldable Support**:
@@ -160,7 +167,7 @@ npm run dev
 2. In NexusRemote, tap your Fire TV.
 3. An on-screen dialog will appear on your TV: *"Allow USB debugging?"*
 4. Check **Always allow from this computer** and select **OK**.
-5. NexusRemote signs the challenge via the Android Keystore RSA key and connects.
+5. NexusRemote formats the 524-byte `RSAPublicKey` struct, signs the challenge via the Android Keystore RSA key (`NONEwithRSA`), and connects.
 
 #### B. Roku TV & Streaming Stick
 1. On Roku: Go to **Settings** → **System** → **Advanced system settings** → **Control by mobile apps** → Set to **Default** or **Permissive**.
@@ -170,13 +177,13 @@ npm run dev
 #### C. LG webOS Smart TV
 1. Turn on your LG TV and connect to the same Wi-Fi.
 2. Go to **Settings** → **All Settings** → **Connection** → **Mobile TV On** → Turn ON **Turn on via Wi-Fi**.
-3. In NexusRemote, tap your LG TV.
+3. In NexusRemote, tap your LG TV. Connection defaults to secure WSS (`3001`) with TOFU TLS certificate pinning.
 4. A prompt will appear in the top-right corner of the TV: *"Allow NexusRemote to connect?"* Select **Yes**.
-5. The pairing key is encrypted in your phone's Keystore. All future connections connect automatically.
+5. The pairing key is encrypted in your phone's Keystore using per-device AES-256 keys with AAD label binding.
 
 #### D. Samsung Tizen Smart TV
 1. Go to **Settings** → **General** → **Network** → **Expert Settings** → Turn ON **IP Remote**.
-2. In NexusRemote, tap your Samsung TV.
+2. In NexusRemote, tap your Samsung TV. Connection defaults to secure WSS (`8002`) with TOFU TLS certificate pinning.
 3. An access popup will appear on your TV screen. Using your physical remote, select **Allow**.
 
 #### E. Sony BRAVIA TV
@@ -217,13 +224,18 @@ npm run dev
 │   └── app/
 │       ├── build.gradle.kts                    # Gradle dependencies (Room, DataStore, Compose M3)
 │       └── src/main/
-│           ├── AndroidManifest.xml             # Network & IR permissions
+│           ├── AndroidManifest.xml             # OWASP MASVS permissions & network security config
+│           ├── res/xml/
+│           │   ├── backup_rules.xml            # Full backup exclusions for Room & SharedPreferences
+│           │   ├── data_extraction_rules.xml   # Android 12+ cloud/device data extraction rules
+│           │   └── network_security_config.xml # Global cleartextTrafficPermitted=false config
 │           └── java/com/nexusremote/
 │               ├── MainActivity.kt             # Main entry point
 │               ├── domain/model/
 │               │   └── DeviceModels.kt         # SavedDevice entity, ProtocolType, DeviceCapability
 │               ├── security/
-│               │   └── KeystoreSecretManager.kt # Android Keystore AES-256 GCM & RSA-2048 TEE signing
+│               │   ├── KeystoreSecretManager.kt # Per-device AES-256 GCM, AAD binding, 524-byte RSA struct
+│               │   └── TofuTrustManager.kt     # Trust-On-First-Use TLS leaf certificate pinning
 │               ├── data/local/
 │               │   ├── NexusDatabase.kt        # Room DB & DeviceDao (survives reboots)
 │               │   └── DevicePreferences.kt    # Preferences DataStore for default TV & settings
@@ -231,14 +243,14 @@ npm run dev
 │               │   └── NetworkDiscoveryManager.kt # mDNS (NsdManager), SSDP Multicast, /24 subnet scanner
 │               ├── protocols/
 │               │   ├── DeviceController.kt     # Unified common interface for TV adapters
-│               │   ├── AdbProtocolAdapter.kt   # Fire TV / Android TV ADB 5555 with RSA auth
+│               │   ├── AdbProtocolAdapter.kt   # Hardened Fire TV / Android TV ADB 5555 with allowlists
 │               │   ├── RokuEcpAdapter.kt       # Roku External Control Protocol HTTP 8060
-│               │   ├── SamsungTizenAdapter.kt  # Samsung Tizen WebSocket 8001/8002
-│               │   ├── LgWebOsAdapter.kt       # LG webOS SSAP WebSocket 3000/3001
+│               │   ├── SamsungTizenAdapter.kt  # Samsung Tizen WSS 8002 with TOFU TLS & plaintext guard
+│               │   ├── LgWebOsAdapter.kt       # LG webOS SSAP WSS 3001 with TOFU TLS & plaintext guard
 │               │   ├── SonyBraviaAdapter.kt    # Sony BRAVIA REST & IRCC-IP SOAP with PSK
-│               │   ├── HisenseVidaaAdapter.kt  # Hisense VIDAA SSL TCP 5000 with PIN
+│               │   ├── HisenseVidaaAdapter.kt  # Hisense VIDAA SSL TCP 5000 with TOFU TLS
 │               │   ├── PanasonicAdapter.kt     # Panasonic Viera UPnP SOAP 55000
-│               │   ├── AndroidTvRemoteAdapter.kt # Google Android TV Remote v2 (TLS 6467)
+│               │   ├── AndroidTvRemoteAdapter.kt # Google Android TV Remote v2 TLS 6467 with TOFU TLS
 │               │   ├── ConsumerIrAdapter.kt    # ConsumerIrManager with Magic V5 check & brand DB
 │               │   └── ProtocolRegistry.kt     # Factory mapping SavedDevice to Protocol Adapter
 │               ├── viewmodel/
