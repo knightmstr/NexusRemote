@@ -283,6 +283,8 @@ class AdbProtocolAdapter(
                 if (bytesRead >= 24) {
                     buffer = ByteBuffer.wrap(header).order(ByteOrder.LITTLE_ENDIAN)
                     cmd = buffer.int
+                    buffer.int // arg0
+                    buffer.int // arg1
                     dataLen = buffer.int
                     if (cmd == A_CNXN) {
                         readPayload(input, dataLen)
@@ -303,6 +305,8 @@ class AdbProtocolAdapter(
                 if (bytesRead >= 24) {
                     buffer = ByteBuffer.wrap(header).order(ByteOrder.LITTLE_ENDIAN)
                     cmd = buffer.int
+                    buffer.int // arg0
+                    buffer.int // arg1
                     dataLen = buffer.int
                     if (cmd == A_CNXN) {
                         readPayload(input, dataLen)
