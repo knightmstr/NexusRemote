@@ -8,6 +8,7 @@ import com.nexusremote.domain.model.InstalledTvApp
 import com.nexusremote.domain.model.RemoteCommand
 import com.nexusremote.domain.model.SavedDevice
 import com.nexusremote.security.KeystoreSecretManager
+import com.nexusremote.security.TofuTrustManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -16,12 +17,13 @@ import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.net.InetSocketAddress
 import java.net.Socket
-import javax.net.ssl.SSLSocketFactory
+import javax.net.ssl.SSLSocket
 
 /**
- * Hisense VIDAA Smart TV Protocol Adapter.
- * Connects over SSL TCP / MQTT on port 5000 utilizing the official Hisense RemoteNOW specification.
- * Handles TV PIN code pairing challenge and remote key injection.
+ * Hardened Hisense VIDAA Smart TV Protocol Adapter.
+ * OWASP MASVS Controls:
+ * - Connects over SSL TCP on port 5000 using Trust-On-First-Use (TOFU) TLS Certificate Pinning.
+ * - Handles TV 4-digit PIN code pairing challenge securely.
  */
 class HisenseVidaaAdapter(
     override val device: SavedDevice,
@@ -61,14 +63,18 @@ class HisenseVidaaAdapter(
         _connectionState.value = DeviceOnlineStatus.CHECKING
         val port = if (device.port != 0) device.port else DEFAULT_PORT
         try {
-            val socket = SSLSocketFactory.getDefault().createSocket()
-            socket.soTimeout = 4000
-            socket.connect(InetSocketAddress(device.hostIp, port), 3000)
-            activeSocket = socket
+            // OWASP MASVS: Secure SSL socket with Trust-On-First-Use (TOFU) TLS Pinning
+            val sslContext = TofuTrustManager.createSslContext(device.id, keystoreSecretManager)
+            val sslSocket = sslContext.socketFactory.createSocket() as SSLSocket
+            sslSocket.soTimeout = 4000
+            sslSocket.connect(InetSocketAddress(device.hostIp, port), 3000)
+            sslSocket.startHandshake()
+
+            activeSocket = sslSocket
             _connectionState.value = DeviceOnlineStatus.ONLINE
             true
         } catch (e: Exception) {
-            Log.e(TAG, "Hisense VIDAA connection failed: ${e.message}")
+            Log.e(TAG, "Hisense VIDAA TLS connection failed: ${e.message}")
             _connectionState.value = DeviceOnlineStatus.OFFLINE
             false
         }

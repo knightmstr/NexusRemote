@@ -73,7 +73,8 @@ data class SavedDevice(
     val isDefault: Boolean = false,
     val lastConnectedTimestamp: Long = 0L,
     val capabilities: Set<DeviceCapability> = emptySet(),
-    val onlineStatus: DeviceOnlineStatus = DeviceOnlineStatus.CHECKING
+    val onlineStatus: DeviceOnlineStatus = DeviceOnlineStatus.CHECKING,
+    val allowPlaintextFallback: Boolean = false
 )
 
 /**

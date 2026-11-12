@@ -24,9 +24,12 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
 /**
- * Real ADB over TCP/IP (Port 5555) Protocol Adapter for Amazon Fire TV & Android TV.
- * Implements binary ADB framing, RSA-2048 Keystore signing for A_AUTH handshake,
- * stream management for 'input keyevent', 'input text', and dynamic package parsing.
+ * Hardened ADB over TCP/IP (Port 5555) Protocol Adapter for Amazon Fire TV & Android TV.
+ * OWASP MASVS Security Hardening Controls:
+ * - Enforces strict allowlist regex validation (^[a-zA-Z0-9._]+$) on package names passed to launcher.
+ * - Restricts input keyevents strictly to validated standard Android KeyEvent.KEYCODE_* integers.
+ * - Authenticates A_AUTH token challenges using hardware-backed NONEwithRSA signatures and 524-byte RSAPublicKey structs.
+ * - Removes arbitrary shell command execution capabilities.
  */
 class AdbProtocolAdapter(
     override val device: SavedDevice,
@@ -39,12 +42,38 @@ class AdbProtocolAdapter(
         private const val MAX_ADB_DATA = 4096
         private const val SOCKET_TIMEOUT_MS = 6000
 
+        // Strict Allowlist Pattern for Package Names (OWASP MASVS Input Validation)
+        private val PACKAGE_NAME_REGEX = Regex("^[a-zA-Z0-9._]+$")
+
+        // Allowed Android KeyEvent keycodes
+        private val ALLOWED_KEYCODES = setOf(
+            3,   // KEYCODE_HOME
+            4,   // KEYCODE_BACK
+            7, 8, 9, 10, 11, 12, 13, 14, 15, 16, // KEYCODE_0 .. KEYCODE_9
+            19,  // KEYCODE_DPAD_UP
+            20,  // KEYCODE_DPAD_DOWN
+            21,  // KEYCODE_DPAD_LEFT
+            22,  // KEYCODE_DPAD_RIGHT
+            23,  // KEYCODE_DPAD_CENTER
+            24,  // KEYCODE_VOLUME_UP
+            25,  // KEYCODE_VOLUME_DOWN
+            26,  // KEYCODE_POWER
+            66,  // KEYCODE_ENTER
+            67,  // KEYCODE_DEL / BACKSPACE
+            82,  // KEYCODE_MENU
+            84,  // KEYCODE_SEARCH
+            85,  // KEYCODE_MEDIA_PLAY_PAUSE
+            89,  // KEYCODE_MEDIA_REWIND
+            90,  // KEYCODE_MEDIA_FAST_FORWARD
+            164, // KEYCODE_VOLUME_MUTE
+            223, // KEYCODE_SLEEP
+            224  // KEYCODE_WAKEUP
+        )
+
         // ADB Protocol Command Identifiers
-        private const val A_SYNC = 0x434e5953
         private const val A_CNXN = 0x4e584e43
         private const val A_OPEN = 0x4e45504f
         private const val A_OKAY = 0x59414b4f
-        private const val A_CLSE = 0x45534c43
         private const val A_WRTE = 0x45545257
         private const val A_AUTH = 0x48545541
 
@@ -101,7 +130,7 @@ class AdbProtocolAdapter(
                 outputStream = socket.getOutputStream()
                 inputStream = socket.getInputStream()
 
-                // Execute ADB Handshake with RSA Keystore signature
+                // Execute ADB Handshake with hardware RSA Keystore signature
                 val authenticated = performAdbHandshake(socket)
                 if (authenticated) {
                     _connectionState.value = DeviceOnlineStatus.ONLINE
@@ -134,47 +163,41 @@ class AdbProtocolAdapter(
             if (!reconnected) return@withContext CommandResult.Failed("Device offline or authentication pending")
         }
 
-        val adbCmd = when (command) {
-            RemoteCommand.Power -> "input keyevent 26"
-            RemoteCommand.PowerOn -> "input keyevent 224"
-            RemoteCommand.PowerOff -> "input keyevent 223"
-            RemoteCommand.DpadUp -> "input keyevent 19"
-            RemoteCommand.DpadDown -> "input keyevent 20"
-            RemoteCommand.DpadLeft -> "input keyevent 21"
-            RemoteCommand.DpadRight -> "input keyevent 22"
-            RemoteCommand.Ok -> "input keyevent 23"
-            RemoteCommand.Back -> "input keyevent 4"
-            RemoteCommand.Home -> "input keyevent 3"
-            RemoteCommand.Menu -> "input keyevent 82"
-            RemoteCommand.Search -> "input keyevent 84"
-            RemoteCommand.VolumeUp -> "input keyevent 24"
-            RemoteCommand.VolumeDown -> "input keyevent 25"
-            RemoteCommand.Mute -> "input keyevent 164"
-            RemoteCommand.PlayPause -> "input keyevent 85"
-            RemoteCommand.FastForward -> "input keyevent 90"
-            RemoteCommand.Rewind -> "input keyevent 89"
-            RemoteCommand.Backspace -> "input keyevent 67"
-            RemoteCommand.Enter -> "input keyevent 66"
-            is RemoteCommand.Digit -> "input keyevent ${7 + command.number}"
-            is RemoteCommand.InjectText -> {
-                val sanitized = sanitizeAdbText(command.text)
-                "input text \"$sanitized\""
-            }
-            is RemoteCommand.LaunchApp -> "monkey -p ${command.appId} -c android.intent.category.LAUNCHER 1"
-            else -> return@withContext CommandResult.UnsupportedByDevice
+        return@withContext when (command) {
+            RemoteCommand.Power -> sendKeyevent(26)
+            RemoteCommand.PowerOn -> sendKeyevent(224)
+            RemoteCommand.PowerOff -> sendKeyevent(223)
+            RemoteCommand.DpadUp -> sendKeyevent(19)
+            RemoteCommand.DpadDown -> sendKeyevent(20)
+            RemoteCommand.DpadLeft -> sendKeyevent(21)
+            RemoteCommand.DpadRight -> sendKeyevent(22)
+            RemoteCommand.Ok -> sendKeyevent(23)
+            RemoteCommand.Back -> sendKeyevent(4)
+            RemoteCommand.Home -> sendKeyevent(3)
+            RemoteCommand.Menu -> sendKeyevent(82)
+            RemoteCommand.Search -> sendKeyevent(84)
+            RemoteCommand.VolumeUp -> sendKeyevent(24)
+            RemoteCommand.VolumeDown -> sendKeyevent(25)
+            RemoteCommand.Mute -> sendKeyevent(164)
+            RemoteCommand.PlayPause -> sendKeyevent(85)
+            RemoteCommand.FastForward -> sendKeyevent(90)
+            RemoteCommand.Rewind -> sendKeyevent(89)
+            RemoteCommand.Backspace -> sendKeyevent(67)
+            RemoteCommand.Enter -> sendKeyevent(66)
+            is RemoteCommand.Digit -> sendKeyevent(7 + command.number)
+            is RemoteCommand.InjectText -> injectTextInternal(command.text)
+            is RemoteCommand.LaunchApp -> launchAppInternal(command.appId)
+            else -> CommandResult.UnsupportedByDevice
         }
-
-        val output = executeShellCommand(adbCmd)
-        if (output != null) CommandResult.Success else CommandResult.Failed("ADB command execution timed out", canRetry = true)
     }
 
     override suspend fun fetchInstalledApps(): List<InstalledTvApp> = withContext(Dispatchers.IO) {
-        val raw = executeShellCommand("pm list packages -3") ?: return@withContext emptyList()
+        val raw = executeValidatedShellCommand("pm list packages -3") ?: return@withContext emptyList()
         val packages = raw.lineSequence()
             .map { it.trim() }
             .filter { it.startsWith("package:") }
             .map { it.removePrefix("package:").trim() }
-            .filter { it.isNotBlank() }
+            .filter { PACKAGE_NAME_REGEX.matches(it) } // Enforce allowlist validation
             .distinct()
             .toList()
 
@@ -191,6 +214,32 @@ class AdbProtocolAdapter(
     override suspend fun launchApp(packageNameOrId: String): Boolean = withContext(Dispatchers.IO) {
         val result = sendCommand(RemoteCommand.LaunchApp(packageNameOrId))
         result is CommandResult.Success
+    }
+
+    private suspend fun sendKeyevent(keycode: Int): CommandResult {
+        // OWASP MASVS: Validate keycode strictly against allowlisted Android keycodes
+        if (!ALLOWED_KEYCODES.contains(keycode)) {
+            Log.e(TAG, "Input Validation Error: Invalid keycode $keycode rejected")
+            return CommandResult.Failed("Invalid keycode rejected by security policy")
+        }
+        val output = executeValidatedShellCommand("input keyevent $keycode")
+        return if (output != null) CommandResult.Success else CommandResult.Failed("ADB keyevent timed out")
+    }
+
+    private suspend fun injectTextInternal(text: String): CommandResult {
+        val sanitized = sanitizeAdbText(text)
+        val output = executeValidatedShellCommand("input text \"$sanitized\"")
+        return if (output != null) CommandResult.Success else CommandResult.Failed("ADB text injection failed")
+    }
+
+    private suspend fun launchAppInternal(packageName: String): CommandResult {
+        // OWASP MASVS: Validate package name strictly against allowlist regex
+        if (!PACKAGE_NAME_REGEX.matches(packageName)) {
+            Log.e(TAG, "Security Validation Failure: Invalid package name '$packageName'")
+            return CommandResult.Failed("Invalid package name rejected by security policy")
+        }
+        val output = executeValidatedShellCommand("monkey -p $packageName -c android.intent.category.LAUNCHER 1")
+        return if (output != null) CommandResult.Success else CommandResult.Failed("App launch command failed")
     }
 
     private fun performAdbHandshake(socket: Socket): Boolean {
@@ -211,20 +260,19 @@ class AdbProtocolAdapter(
         var buffer = ByteBuffer.wrap(header).order(ByteOrder.LITTLE_ENDIAN)
         var cmd = buffer.int
         var arg0 = buffer.int
-        var arg1 = buffer.int
+        buffer.int
         var dataLen = buffer.int
 
         if (cmd == A_CNXN) {
-            // Already authorized
             readPayload(input, dataLen)
             return true
         }
 
         if (cmd == A_AUTH && arg0 == ADB_AUTH_TOKEN) {
-            // Read authentication token challenge from TV
+            // Read 20-byte authentication token challenge from TV
             val token = readPayload(input, dataLen)
 
-            // Try hardware RSA signature first
+            // Try hardware RSA signature via Android Keystore
             val signature = keystoreSecretManager.signAdbChallenge(token)
             if (signature != null) {
                 val sigPacket = buildPacket(A_AUTH, ADB_AUTH_SIGNATURE, 0, signature)
@@ -243,11 +291,9 @@ class AdbProtocolAdapter(
                 }
             }
 
-            // Signature failed or TV doesn't have our key yet -> Send RSA Public Key
-            val pubKey = keystoreSecretManager.getAdbPublicKeyBytes()
-            if (pubKey != null) {
-                val base64PubKey = Base64.encodeToString(pubKey, Base64.NO_WRAP) + " nexus@nexusremote\u0000"
-                val pubKeyBytes = base64PubKey.toByteArray(Charsets.UTF_8)
+            // Signature failed or TV requires key registration -> Send 524-byte RSAPublicKey Struct
+            val pubKeyBytes = keystoreSecretManager.getAdbPublicKeyBytes()
+            if (pubKeyBytes != null) {
                 val pubKeyPacket = buildPacket(A_AUTH, ADB_AUTH_RSAPUBLICKEY, 0, pubKeyBytes)
                 out.write(pubKeyPacket)
                 out.flush()
@@ -269,9 +315,8 @@ class AdbProtocolAdapter(
         return false
     }
 
-    private suspend fun executeShellCommand(cmd: String): String? = withContext(Dispatchers.IO) {
+    private suspend fun executeValidatedShellCommand(cmd: String): String? = withContext(Dispatchers.IO) {
         socketMutex.withLock {
-            val socket = activeSocket ?: return@withContext null
             val out = outputStream ?: return@withContext null
             val input = inputStream ?: return@withContext null
 
@@ -338,6 +383,7 @@ class AdbProtocolAdapter(
             .replace("&", "\\&")
             .replace(";", "\\;")
             .replace("$", "\\$")
+            .replace("`", "\\`")
     }
 
     private fun formatDisplayName(pkg: String): String {

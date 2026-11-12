@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Exclude sensitive database and data store files from full backups per OWASP MASVS -->
+<full-backup-content>
+    <exclude domain="database" path="nexus_remote_db" />
+    <exclude domain="sharedpref" path="nexus_remote_secure_vault.xml" />
+    <exclude domain="sharedpref" path="nexus_device_prefs.xml" />
+</full-backup-content>

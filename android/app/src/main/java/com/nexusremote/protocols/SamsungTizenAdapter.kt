@@ -9,6 +9,7 @@ import com.nexusremote.domain.model.InstalledTvApp
 import com.nexusremote.domain.model.RemoteCommand
 import com.nexusremote.domain.model.SavedDevice
 import com.nexusremote.security.KeystoreSecretManager
+import com.nexusremote.security.TofuTrustManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -17,17 +18,17 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
-import java.io.InputStream
 import java.io.OutputStream
 import java.net.InetSocketAddress
 import java.net.Socket
-import java.net.URL
-import javax.net.ssl.SSLSocketFactory
+import javax.net.ssl.SSLSocket
 
 /**
- * Samsung Tizen Smart TV Protocol Adapter.
- * Connects via WebSocket on port 8001 / 8002 using Samsung's official ms.remote.control channel.
- * Manages token authentication with hardware Keystore caching and on-screen TV approval.
+ * Hardened Samsung Tizen Smart TV Protocol Adapter.
+ * Security Controls:
+ * - Defaults to secure WSS on port 8002 using Trust-On-First-Use (TOFU) TLS certificate pinning.
+ * - Requires explicit user permission (allowPlaintextFallback == true) before falling back to unencrypted WS on port 8001.
+ * - Manages authorization tokens in Android Keystore with AAD integrity binding.
  */
 class SamsungTizenAdapter(
     override val device: SavedDevice,
@@ -37,6 +38,8 @@ class SamsungTizenAdapter(
     companion object {
         private const val TAG = "SamsungTizenAdapter"
         private const val SECRET_TOKEN_KEY = "tizen_auth_token"
+        private const val DEFAULT_SSL_PORT = 8002
+        private const val PLAINTEXT_PORT = 8001
     }
 
     override val capabilities: Set<DeviceCapability> = setOf(
@@ -75,19 +78,34 @@ class SamsungTizenAdapter(
 
             val savedToken = keystoreSecretManager.getSecret(device.id, SECRET_TOKEN_KEY)
             val appNameEncoded = Base64.encodeToString("NexusRemote".toByteArray(), Base64.NO_WRAP)
-            val port = if (device.port == 8002 || device.port == 0) 8002 else 8001
-            val useSsl = port == 8002
+
+            // OWASP MASVS: Default to secure SSL WSS (Port 8002) with TOFU TLS Pinning
+            var port = if (device.port == PLAINTEXT_PORT) PLAINTEXT_PORT else DEFAULT_SSL_PORT
+            var useSsl = port == DEFAULT_SSL_PORT
+
+            // Block unconsented plaintext fallback
+            if (!useSsl && !device.allowPlaintextFallback) {
+                Log.e(TAG, "Security Policy Violation: Plaintext WS (8001) requested for Samsung Tizen without explicit user confirmation!")
+                _connectionState.value = DeviceOnlineStatus.OFFLINE
+                return@withContext false
+            }
 
             Log.i(TAG, "Connecting to Samsung Tizen TV at ${device.hostIp}:$port (SSL=$useSsl)")
 
             try {
                 val socket = if (useSsl) {
-                    SSLSocketFactory.getDefault().createSocket()
+                    val sslContext = TofuTrustManager.createSslContext(device.id, keystoreSecretManager)
+                    val sslSocket = sslContext.socketFactory.createSocket() as SSLSocket
+                    sslSocket.soTimeout = 5000
+                    sslSocket.connect(InetSocketAddress(device.hostIp, port), 3500)
+                    sslSocket.startHandshake()
+                    sslSocket
                 } else {
-                    Socket()
+                    val plainSocket = Socket()
+                    plainSocket.soTimeout = 5000
+                    plainSocket.connect(InetSocketAddress(device.hostIp, port), 3500)
+                    plainSocket
                 }
-                socket.soTimeout = 5000
-                socket.connect(InetSocketAddress(device.hostIp, port), 3500)
 
                 activeSocket = socket
                 outStream = socket.getOutputStream()
@@ -113,7 +131,7 @@ class SamsungTizenAdapter(
 
                 if (responseStr.contains("101 Switching Protocols")) {
                     _connectionState.value = DeviceOnlineStatus.ONLINE
-                    Log.i(TAG, "Samsung Tizen WebSocket session established with ${device.hostIp}")
+                    Log.i(TAG, "Samsung Tizen WSS secure session established with ${device.hostIp}")
                     true
                 } else {
                     _connectionState.value = DeviceOnlineStatus.AUTH_REQUIRED

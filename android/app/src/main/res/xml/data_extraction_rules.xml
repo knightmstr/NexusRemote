@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android 12+ (API 31+) Data Extraction Rules excluding Room DB and secure vault per OWASP MASVS -->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="database" path="nexus_remote_db" />
+        <exclude domain="sharedpref" path="nexus_remote_secure_vault.xml" />
+        <exclude domain="sharedpref" path="nexus_device_prefs.xml" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="database" path="nexus_remote_db" />
+        <exclude domain="sharedpref" path="nexus_remote_secure_vault.xml" />
+        <exclude domain="sharedpref" path="nexus_device_prefs.xml" />
+    </device-transfer>
+</data-extraction-rules>

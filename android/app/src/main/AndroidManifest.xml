@@ -8,7 +8,12 @@
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
 
-    <!-- Android 13+ Local Network & Device Discovery (bypasses fine location requirement) -->
+    <!-- Support subnet discovery on Android 8.0–12 without requesting location permissions on Android 13+ -->
+    <uses-permission
+        android:name="android.permission.ACCESS_FINE_LOCATION"
+        android:maxSdkVersion="32" />
+
+    <!-- Android 13+ Local Network & Device Discovery (bypasses fine location requirement on API 33+) -->
     <uses-permission
         android:name="android.permission.NEARBY_WIFI_DEVICES"
         android:usesPermissionFlags="neverForLocation"
@@ -20,13 +25,17 @@
     <!-- Consumer IR Blaster Hardware Access -->
     <uses-permission android:name="android.permission.TRANSMIT_IR" />
 
-    <!-- Declare IR hardware as optional so the app installs on devices without an IR blaster (e.g. HONOR Magic V5) -->
+    <!-- Declare IR hardware as optional so the app installs on devices without an IR blaster -->
     <uses-feature
         android:name="android.hardware.consumerir"
         android:required="false" />
 
+    <!-- Application configuration hardened for OWASP MASVS compliance -->
     <application
-        android:allowBackup="true"
+        android:allowBackup="false"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="@xml/backup_rules"
+        android:networkSecurityConfig="@xml/network_security_config"
         android:icon="@mipmap/ic_launcher"
         android:label="NexusRemote"
         android:roundIcon="@mipmap/ic_launcher_round"

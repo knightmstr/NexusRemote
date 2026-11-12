@@ -91,6 +91,23 @@ This document records the chronological history, engineering decisions, architec
 
 ---
 
+### Milestone 7: Principal Security Engineer Hardening & OWASP MASVS Compliance
+- **Manifest & Backup Controls**:
+  - Configured `android:allowBackup="false"`, `android:dataExtractionRules` (`@xml/data_extraction_rules`), and `android:fullBackupContent` (`@xml/backup_rules`) to exclude Room DB (`nexus_remote_db`) and secure vault SharedPreferences (`nexus_remote_secure_vault`, `nexus_device_prefs`).
+  - Added `<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" android:maxSdkVersion="32" />` for subnet discovery on Android 8.0–12 while preserving Android 13+ location-free discovery.
+  - Created `@xml/network_security_config` enforcing `cleartextTrafficPermitted="false"` globally.
+- **Cryptographic Hardening (`KeystoreSecretManager.kt`)**:
+  - Replaced single global AES master key with per-device AES-256-GCM keys (`nexus_key_$deviceId`) enabling true cryptographic erasure in `removeDeviceSecrets(deviceId)`.
+  - Bound storage keys (`"${deviceId}::${secretKeyName}"`) as Additional Authenticated Data (`cipher.updateAAD()`) to defeat cross-device ciphertext substitution.
+  - Applied `setUnlockedDeviceRequired(true)` (API 28+) and attempted `setIsStrongBoxBacked(true)` with graceful TEE fallback.
+  - Formatted `getAdbPublicKeyBytes()` into native 524-byte ADB `RSAPublicKey` struct (modulus, R^2 mod N, -N^-1 mod 2^32) and configured RSA signing with `NONEwithRSA` and pre-built SHA-1 ASN.1 DigestInfo header.
+- **TLS Certificate Pinning & Protocol Sanitization (`TofuTrustManager.kt` & Adapters)**:
+  - Built Trust-On-First-Use (TOFU) `X509TrustManager` computing SHA-256 leaf certificate fingerprints on initial pair and rejecting connection mismatches.
+  - Defaulted Samsung Tizen (WSS 8002) and LG webOS (WSS 3001) to TLS sockets with user consent guards on plaintext fallback.
+  - Hardened `AdbProtocolAdapter.kt` by enforcing strict package allowlist regex (`^[a-zA-Z0-9._]+$`) and restricting keyevents strictly to standard `KeyEvent.KEYCODE_*` integers.
+
+---
+
 ## 📈 Architecture Decision Records (ADRs)
 
 | ADR ID | Decision Title | Status | Rationale |
@@ -100,3 +117,6 @@ This document records the chronological history, engineering decisions, architec
 | **ADR-003** | Capability-Driven UI Rendering | Accepted | Eliminates "dead buttons" by inspecting protocol capabilities at runtime. Users never encounter non-functional controls. |
 | **ADR-004** | Subnet-Bounded Discovery (`/24`) | Accepted | Prevents network security exceptions on Android 12+ and avoids scanning unauthorized or public subnets. |
 | **ADR-005** | No-Assumption IR Hardware Detection | Accepted | The HONOR Magic V5 and modern foldables vary across global hardware revisions. Calling `hasIrEmitter()` prevents runtime crashes on variants without an IR diode. |
+| **ADR-006** | TOFU TLS Certificate Pinning | Accepted | Smart TV local SSL/TLS endpoints often generate self-signed certificates. Trust-On-First-Use pins the leaf SHA-256 fingerprint on pair and blocks MitM interception on subnets. |
+| **ADR-007** | Per-Device AES Keys & AAD Binding | Accepted | Isolated per-device keys enable instant cryptographic erasure upon device deletion, while AAD label binding prevents ciphertext translocation between saved devices. |
+

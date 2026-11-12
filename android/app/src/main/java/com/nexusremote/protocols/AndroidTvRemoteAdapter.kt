@@ -8,21 +8,21 @@ import com.nexusremote.domain.model.InstalledTvApp
 import com.nexusremote.domain.model.RemoteCommand
 import com.nexusremote.domain.model.SavedDevice
 import com.nexusremote.security.KeystoreSecretManager
+import com.nexusremote.security.TofuTrustManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.withContext
-import java.io.InputStream
 import java.io.OutputStream
 import java.net.InetSocketAddress
 import javax.net.ssl.SSLSocket
-import javax.net.ssl.SSLSocketFactory
 
 /**
- * Google Android TV Remote Protocol v2 Adapter (TLS Port 6467).
- * Official protocol used by the Google TV mobile app to communicate with
- * Chromecast with Google TV, Sony Google TVs, and certified Android TV 10+ devices.
+ * Hardened Google Android TV Remote Protocol v2 Adapter (TLS Port 6467).
+ * OWASP MASVS Controls:
+ * - Uses Trust-On-First-Use (TOFU) TLS certificate pinning to prevent MitM attacks on local network TLS sockets.
+ * - Communicates with Chromecast with Google TV, Sony Google TVs, and certified Android TV 10+ devices.
  */
 class AndroidTvRemoteAdapter(
     override val device: SavedDevice,
@@ -61,8 +61,9 @@ class AndroidTvRemoteAdapter(
         _connectionState.value = DeviceOnlineStatus.CHECKING
         val port = if (device.port != 0) device.port else DEFAULT_PORT
         try {
-            val factory = SSLSocketFactory.getDefault() as SSLSocketFactory
-            val socket = factory.createSocket() as SSLSocket
+            // OWASP MASVS: TOFU TLS Certificate Pinning SSL Context
+            val sslContext = TofuTrustManager.createSslContext(device.id, keystoreSecretManager)
+            val socket = sslContext.socketFactory.createSocket() as SSLSocket
             socket.soTimeout = 4000
             socket.connect(InetSocketAddress(device.hostIp, port), 3500)
             socket.startHandshake()

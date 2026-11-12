@@ -8,6 +8,7 @@ import com.nexusremote.domain.model.InstalledTvApp
 import com.nexusremote.domain.model.RemoteCommand
 import com.nexusremote.domain.model.SavedDevice
 import com.nexusremote.security.KeystoreSecretManager
+import com.nexusremote.security.TofuTrustManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -21,12 +22,14 @@ import java.io.InputStream
 import java.io.OutputStream
 import java.net.InetSocketAddress
 import java.net.Socket
-import javax.net.ssl.SSLSocketFactory
+import javax.net.ssl.SSLSocket
 
 /**
- * LG webOS Smart TV Protocol Adapter (webOS 3.0+ / OLED / QNED / NanoCell).
- * Connects over SSAP WebSocket (Port 3000 / 3001) using LG's official JSON-RPC manifest handshake.
- * Stores paired client-key in hardware Keystore and executes official ssap:// endpoints.
+ * Hardened LG webOS Smart TV Protocol Adapter (webOS 3.0+ / OLED / QNED / NanoCell).
+ * OWASP MASVS Security Controls:
+ * - Defaults to secure WSS on port 3001 using Trust-On-First-Use (TOFU) TLS certificate pinning.
+ * - Enforces explicit user permission (allowPlaintextFallback == true) before allowing fallback to unencrypted WS (3000).
+ * - Encrypts paired client keys using per-device AES-256 keys with AAD binding in Android Keystore.
  */
 class LgWebOsAdapter(
     override val device: SavedDevice,
@@ -36,6 +39,8 @@ class LgWebOsAdapter(
     companion object {
         private const val TAG = "LgWebOsAdapter"
         private const val SECRET_CLIENT_KEY = "webos_client_key"
+        private const val DEFAULT_SSL_PORT = 3001
+        private const val PLAINTEXT_PORT = 3000
     }
 
     override val capabilities: Set<DeviceCapability> = setOf(
@@ -75,19 +80,34 @@ class LgWebOsAdapter(
             _connectionState.value = DeviceOnlineStatus.CHECKING
 
             val savedClientKey = keystoreSecretManager.getSecret(device.id, SECRET_CLIENT_KEY)
-            val port = if (device.port == 3001) 3001 else 3000
-            val useSsl = port == 3001
+
+            // OWASP MASVS: Default to secure SSL WSS (Port 3001) with TOFU TLS Pinning
+            val port = if (device.port == PLAINTEXT_PORT) PLAINTEXT_PORT else DEFAULT_SSL_PORT
+            val useSsl = port == DEFAULT_SSL_PORT
+
+            // Block unconsented plaintext fallback
+            if (!useSsl && !device.allowPlaintextFallback) {
+                Log.e(TAG, "Security Policy Violation: Plaintext WS (3000) requested for LG webOS without explicit user confirmation!")
+                _connectionState.value = DeviceOnlineStatus.OFFLINE
+                return@withContext false
+            }
 
             Log.i(TAG, "Connecting to LG webOS TV at ${device.hostIp}:$port (SSL=$useSsl)")
 
             try {
                 val socket = if (useSsl) {
-                    SSLSocketFactory.getDefault().createSocket()
+                    val sslContext = TofuTrustManager.createSslContext(device.id, keystoreSecretManager)
+                    val sslSocket = sslContext.socketFactory.createSocket() as SSLSocket
+                    sslSocket.soTimeout = 5000
+                    sslSocket.connect(InetSocketAddress(device.hostIp, port), 3500)
+                    sslSocket.startHandshake()
+                    sslSocket
                 } else {
-                    Socket()
+                    val plainSocket = Socket()
+                    plainSocket.soTimeout = 5000
+                    plainSocket.connect(InetSocketAddress(device.hostIp, port), 3500)
+                    plainSocket
                 }
-                socket.soTimeout = 5000
-                socket.connect(InetSocketAddress(device.hostIp, port), 3500)
 
                 activeSocket = socket
                 outStream = socket.getOutputStream()
@@ -185,7 +205,7 @@ class LgWebOsAdapter(
             RemoteCommand.ChannelUp -> Pair("ssap://tv/channelUp", JSONObject())
             RemoteCommand.ChannelDown -> Pair("ssap://tv/channelDown", JSONObject())
             RemoteCommand.Home -> Pair("ssap://system.launcher/open", JSONObject().put("id", "com.webos.app.home"))
-            RemoteCommand.DpadUp -> Pair("ssap://system.launcher/open", JSONObject()) // SSAP pointer button or key
+            RemoteCommand.DpadUp -> Pair("ssap://system.launcher/open", JSONObject())
             RemoteCommand.DpadDown -> Pair("ssap://system.launcher/open", JSONObject())
             RemoteCommand.Back -> Pair("ssap://system.launcher/open", JSONObject())
             is RemoteCommand.InjectText -> Pair("ssap://com.webos.service.ime/insertText", JSONObject().put("text", command.text))
