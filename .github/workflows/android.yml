@@ -27,12 +27,11 @@ jobs:
         with:
           distribution: temurin
           java-version: 17
-          cache: gradle
-          cache-dependency-path: android/**/*.gradle*
 
-      - name: Grant Permission
-        working-directory: ./android
-        run: chmod +x gradlew
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: 8.7
 
       - name: Resolve Version
         id: version
@@ -46,7 +45,7 @@ jobs:
       - name: Build Debug APK
         working-directory: ./android
         run: |
-          ./gradlew clean assembleDebug \
+          gradle clean assembleDebug \
           -PversionCode=${{ github.run_number }} \
           -PversionName=$VERSION_NAME
 
