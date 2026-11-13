@@ -1,8 +1,8 @@
 # NexusRemote: Universal Multi-Protocol Smart TV & IR Remote
 
 [![Project History & Evolution Log](https://img.shields.io/badge/History-HISTORY.md-blue?style=flat-square)](HISTORY.md)
-[![Platform](https://img.shields.io/badge/Platform-Android%2014%2B%20(API%2034)-green?style=flat-square)](android/)
-[![Kotlin](https://img.shields.io/badge/Kotlin-2.0-purple?style=flat-square)](android/app/src/main/java/com/nexusremote/)
+[![Platform](https://img.shields.io/badge/Platform-Android%208.0%2B%20(API%2026--35)-green?style=flat-square)](android/)
+[![Kotlin](https://img.shields.io/badge/Kotlin-2.0.21-purple?style=flat-square)](android/app/src/main/java/com/nexusremote/)
 [![Jetpack Compose](https://img.shields.io/badge/UI-Jetpack%20Compose%20M3-brightgreen?style=flat-square)](android/app/src/main/java/com/nexusremote/ui/)
 [![Security](https://img.shields.io/badge/OWASP%20MASVS-Hardened-red?style=flat-square)](android/app/src/main/java/com/nexusremote/security/)
 
@@ -51,9 +51,9 @@ All protocols implement the asynchronous `DeviceController` interface, completel
   - TLS socket on port `6467` with **TOFU TLS certificate pinning** and mTLS certificate exchange.
   - Directional DPAD commands, media control, and keyboard synchronization.
 - **Universal Consumer IR (Infrared Blaster)**:
-  - Uses `android.hardware.ConsumerIrManager` for phones with physical IR diodes.
-  - **No-Assumption Hardware Check**: Dynamically queries `hasIrEmitter()` at runtime to verify hardware presence on the host device.
-  - Built-in carrier frequency and waveform databases for 10 major TV brands (Samsung, LG, Sony, Vizio, TCL, Hisense, Philips, Panasonic, Sharp, Toshiba) using 36 kHz, 38 kHz, and 40 kHz NEC/RC-5/SIRC pulse modulations.
+  - Uses `android.hardware.ConsumerIrManager` for phones with physical IR emitters (`android.hardware.consumerir` is declared `required="false"` so phones without an IR blaster can still install and use all Wi-Fi protocols).
+  - **No-Assumption Hardware Check**: Dynamically queries `hasIrEmitter()` at runtime to verify optical hardware presence on the host device.
+  - **23 Verified TV Models & 8 Hardware IR Encoders**: Sourced directly from **`probonopd/irdb`** and **`Lucaslhm/Flipper-IRDB`**, supporting `NEC`, `NEC_EXT` (16-bit extended), `SAMSUNG` (NECx2), `SONY_SIRC` (12-bit 40 kHz), `RC5`, `RC6` (Mode 0 Manchester), `PANASONIC` (48-bit Kaseikyo 37 kHz), and `RCA` (RCA-38 24-bit) with searchable brand/model/protocol filtering.
 
 ### 2. Zero Dead Buttons (Capability-Driven UI)
 - Every UI button checks `activeController.capabilities.contains(DeviceCapability.XYZ)`.
@@ -96,61 +96,79 @@ All protocols implement the asynchronous `DeviceController` interface, completel
 - **App Quick-Launch Dock**: Dynamic horizontal list populated with apps discovered on the target TV.
 
 ### 7. Interactive Web Simulation Companion
-- Built with React, Tailwind CSS, and Lucide icons.
-- Includes a live virtual TV screen simulator, real-time Android Logcat console, ADB/IR event loggers, and a **Kotlin Architecture Studio** browser to inspect the native Kotlin code.
+- Built with React, TypeScript, Tailwind CSS, and Lucide icons.
+- Includes a live virtual TV screen simulator, switchable visual remote skins (**Classic Infrared**, **Modern Streaming**, **Minimalist**), searchable 23-model Universal IR tester, real-time Android Logcat console, ADB/IR event loggers, and a **Kotlin Architecture Studio** browser to inspect the native Kotlin code.
+
+---
+
+## 📡 Supported Universal IR TV Models (23 Verified Profiles)
+
+All Universal IR device addresses, carrier frequencies, and command codes are verified against **`probonopd/irdb`** and **`Lucaslhm/Flipper-IRDB`**. Because many modern TV manufacturers license different smart platforms (e.g., Roku OS, Fire TV OS, Google TV, VIDAA), select the profile that matches both your TV **brand** and **operating system**:
+
+| # | Brand / Profile | Supported TV Models & Series | IR Protocol | Carrier | Addr / Sub | Verified Source |
+|---|---|---|---|---|---|---|
+| 1 | **Samsung** | Neo QLED / OLED / Crystal 4K | `SAMSUNG` | 38 kHz | `0x07` / `0x07` | `probonopd/irdb · Samsung/TV/7,7.csv` |
+| 2 | **LG Electronics** | webOS OLED C3 / QNED / NanoCell | `NEC` | 38 kHz | `0x04` | `probonopd/irdb · 4,-1.csv` & `Flipper-IRDB LG_OLED48C37LA` |
+| 3 | **Sony Bravia** | XR OLED / X80K / Google TV | `SONY_SIRC` | 40 kHz | `0x01` | `probonopd/irdb · 1,-1.csv` & `Flipper-IRDB Sony_KD-55X80CK` |
+| 4 | **Roku TV Universal** | TCL / Hisense / Onn / Insignia / RCA Roku OS | `NEC_EXT` | 38 kHz | `0xEA` / `0xC7` | `Flipper-IRDB · TCL_32S327 & Onn_Roku_TV.ir` |
+| 5 | **TCL Google TV** | QLED C635 / S4 / QM8 Android & Google TV | `RCA` | 38 kHz | `0x0F` | `probonopd/irdb · TCL/15,-1.csv` & `Flipper-IRDB TCL_65C635K` |
+| 6 | **Hisense VIDAA** | E7K / A4H / ULED Smart TV (VIDAA OS) | `NEC_EXT` | 38 kHz | `0x00` / `0xBF` | `Flipper-IRDB · Hisense_55E7KQ & 32A4HAU.ir` |
+| 7 | **Hisense Google TV** | U6K / U7G / U8K Mini-LED (Google TV) | `NEC` | 38 kHz | `0x04` | `Flipper-IRDB · Hisense_55U6K & Hisense_U7G.ir` |
+| 8 | **Vizio SmartCast** | M-Series Quantum / V-Series / P-Series | `NEC` | 38 kHz | `0x04` | `probonopd/irdb · Vizio/4,-1.csv` & `Flipper-IRDB Vizio.ir` |
+| 9 | **Panasonic Viera** | JX800 / OLED / 4K Pro Studio | `PANASONIC` | 37 kHz | `0x80` / `0x00` | `probonopd/irdb · Panasonic/128,0.csv` & `Flipper-IRDB` |
+| 10 | **Philips OLED / Android** | Ambilight 806 OLED / PUS Android TV | `RC6` | 36 kHz | `0x00` | `Flipper-IRDB · Philips_TV_48OLED806 & Universal.ir` |
+| 11 | **Philips Classic** | PFL Smart LED / Legacy Ambilight | `RC5` | 36 kHz | `0x00` | `probonopd/irdb · Philips/TV/0,-1.csv` |
+| 12 | **Amazon Fire TV** | Omni Series 4K / 4-Series / Insignia Fire TV | `NEC_EXT` | 38 kHz | `0x02` / `0x7D` | `Flipper-IRDB · FireTV_Omni_Series_4K.ir` |
+| 13 | **Toshiba Fire TV** | C350 / LF421U Fire TV Edition | `NEC_EXT` | 38 kHz | `0x02` / `0x7D` | `Flipper-IRDB · Toshiba_50C350LC & 43LF421U21.ir` |
+| 14 | **Toshiba Regza** | AV / L-Series Standard HDTV | `NEC` | 38 kHz | `0x40` | `probonopd/irdb · Toshiba/64,-1.csv` & `32AV502U.ir` |
+| 15 | **Sharp Aquos** | 4K UHD / BG3E / Smart LED | `NEC_EXT` | 38 kHz | `0x00` / `0x7F` | `Flipper-IRDB · Sharp/Aquos.ir & 32BG3E.ir` |
+| 16 | **Insignia / Dynex** | NS-Series / DX-Series LED HDTV | `NEC_EXT` | 38 kHz | `0x86` / `0x05` | `probonopd/irdb · Insignia/134,5.csv` & `Flipper-IRDB` |
+| 17 | **Element / Westinghouse** | 100-Series / RMT Smart LED TV | `NEC_EXT` | 38 kHz | `0x02` / `0x7D` | `Flipper-IRDB · Element_100-Series & Westinghouse.ir` |
+| 18 | **Sanyo** | DP / FW Series LCD & LED TV | `NEC` | 38 kHz | `0x38` | `probonopd/irdb · Sanyo/56,-1.csv` & `Sanyo_DP26640.ir` |
+| 19 | **RCA Classic** | CRK / Classic HD & LED Series | `RCA` | 38 kHz | `0x0F` | `probonopd/irdb · RCA/TV/15,-1.csv` |
+| 20 | **RCA LED (NEC)** | RLDED Series Budget LED TV | `NEC` | 38 kHz | `0x20` | `Flipper-IRDB · RCA_RLDED3258A-B.ir` |
+| 21 | **Hitachi / JVC Smart** | RC43140 / Vestel / 4K Smart TV | `RC5` | 36 kHz | `0x03` | `Flipper-IRDB · Hitachi_RC43140.ir` |
+| 22 | **Sceptre** | X50 / U-Series 4K UHD LED | `SONY_SIRC` | 40 kHz | `0x01` | `Flipper-IRDB · Sceptre_X50_Series.ir` |
+| 23 | **Haier** | L42 / Smart Android LED TV | `NEC` | 38 kHz | `0x04` | `Flipper-IRDB · Haier_L42C1180.ir` |
+
+> **Tip**: Insignia Fire TVs use the **Amazon Fire TV** profile (`NEC_EXT 0x02/0x7D`), while standalone Insignia/Dynex non-Fire TVs use **Insignia / Dynex** (`NEC_EXT 0x86/0x05`). Any Roku-branded TV (TCL, Hisense, Onn, Sharp, RCA Roku) uses **Roku TV Universal** (`NEC_EXT 0xEA/0xC7`).
 
 ---
 
 ## 🛠️ Instructions to Install
 
 ### Prerequisites
-- **Android Phone**: Android 8.0+ (API 26+) minimum; Android 14+ (API 34) recommended.
+- **Android Phone / Tablet**: Android **8.0+ (API 26)** minimum; **Android 13+ (API 33–35)** recommended for location-free local network discovery (`NEARBY_WIFI_DEVICES`).
 - **Form Factors**: Fully supported on standard smartphones, foldables, and tablets.
-- **PC / Mac**: Android Studio Jellyfish / Koala or Android SDK Platform-Tools installed.
-- **Local Network**: Phone and TV must be connected to the same Wi-Fi router/subnet (disable AP Client Isolation on router).
+- **Local Network** *(Wi-Fi Smart TV mode only)*: Phone and TV must be connected to the same Wi-Fi router/subnet (disable **AP / Client Isolation** on your router).
+- **IR Blaster** *(Universal IR mode only)*: Requires a phone with a built-in physical IR emitter. Phones without an IR blaster can still install and use all Wi-Fi Smart TV protocols.
 
 ---
 
-### Step 1: Install on Physical Android Phone
+### Step 1: Install the Android App from GitHub Releases
 
-1. **Enable Developer Options & USB Debugging on Your Phone**:
-   - Open **Settings** → **About Phone**.
-   - Tap **Build Number** 7 times until you see *"You are now a developer!"*.
-   - Open **Settings** → **System & Updates** → **Developer Options**.
-   - Enable **USB Debugging** (and **Wireless Debugging** if deploying over Wi-Fi).
-2. **Connect Phone to PC**:
-   ```bash
-   adb devices
-   # Ensure your phone is listed as "device" (accept the USB debugging prompt on the phone screen)
-   ```
-3. **Build and Install Debug APK**:
-   ```bash
-   cd android
-   gradle assembleDebug
-   adb install -r app/build/outputs/apk/debug/app-debug.apk
-   ```
-   *(Or open the `android/` directory in Android Studio and click **Run**).*
+Prebuilt APK releases are automatically generated by GitHub Actions and published on the repository's **Releases** page:
+
+1. On your Android device, open the repository's **[Releases](../../releases)** page on GitHub and download the latest `app-debug-*.apk` asset. *(You can also download the latest build artifact from the **Actions** tab).*
+2. Tap the downloaded `.apk` file in your browser downloads or Android **Files** app.
+3. If Android prompts you for security permission, tap **Settings** → enable **Allow from this source** (*Install unknown apps*) for your browser or file manager, then tap **Install**.
+4. Open **NexusRemote**:
+   - **Wi-Fi Smart TV Users**: Grant **Nearby Devices** (Android 13+) or **Location** (Android 8.0–12) permission when prompted so mDNS/SSDP discovery can scan your local `/24` subnet.
+   - **Universal IR Users**: Switch to **IR Blaster Mode** immediately — no Wi-Fi, pairing PIN, or network permissions are required.
 
 ---
 
-### Step 2: Automated APK Builds via GitHub Actions CI/CD
+### Step 2: Automated CI/CD & Building from Source (Optional for Developers)
 
-A GitHub Actions workflow is configured in `.github/workflows/android.yml` to automatically build the debug APK (`app-debug-<version>.apk`) on pushes/PRs to `main` and create GitHub Releases on `v*` tags using Java 17 and Gradle 8.7.
+A GitHub Actions workflow is configured in `.github/workflows/android.yml` to build `app-debug-<version>.apk` on pushes/PRs to `main` and publish GitHub Releases automatically on `v*` tags using Java 17 and Gradle 8.7.
 
-To push an exported project copy to your GitHub repository from your local machine:
-```bash
-git init -b main
-git add .
-git commit -m "chore: configure Android Gradle build and CI/CD pipeline"
-git remote add origin https://github.com/<your-username>/<your-repo>.git
-git push -u origin main
-```
+If you want to customize or build the native Android app yourself, open the `android/` directory in **Android Studio (Jellyfish / Koala or newer)** with JDK 17 and Android SDK 35, or push changes/tags (`git tag v2.0.1 && git push --tags`) to trigger a new GitHub Release build.
 
 ---
 
-### Step 3: Run the Web Companion & Kotlin Architecture Viewer
+### Step 3: Run the Web Companion & Kotlin Architecture Viewer (Optional)
 
-To explore the interactive TV simulator and inspect the native architecture files in your browser:
+To explore the interactive TV simulator, remote skin switcher, and native Kotlin code viewer in your browser:
 
 ```bash
 # 1. Install dependencies
@@ -208,10 +226,10 @@ npm run dev
 4. In NexusRemote, enter the exact same PSK in the device settings.
 
 #### F. Universal Consumer IR Mode (No Network Needed)
-1. Tap the **IR Blaster Mode** tab at the top of the remote screen.
-2. Select your TV brand from the dropdown (Samsung, LG, Sony, Vizio, TCL, Hisense, Philips, Panasonic, Sharp, Toshiba).
-3. Point your phone's top edge at the TV sensor and press any button.
-   *(Note: If your phone does not have an IR emitter, the app displays a clear message and directs you to Wi-Fi mode).*
+1. Tap the **IR Blaster Mode** tab / **Universal IR** selector on the remote screen (or select a brand under **Universal IR Blaster TV Setup** in Discovery).
+2. Use the search box to filter the **23 verified TV models/series** by brand, model series (e.g., `Roku`, `Fire TV`, `VIDAA`, `Google TV`, `OLED`), or protocol (`NEC`, `RC6`, `PANASONIC`, `RCA`).
+3. Point your phone's IR emitter (typically on the top edge) directly toward the TV's IR sensor (within ~3–8 meters, clear line of sight) and press **Power** or **Vol+** to verify responsiveness.
+   *(Note: If your phone does not have a physical IR emitter, the app detects `hasIrEmitter() == false` and directs you to Wi-Fi protocols instead).*
 
 ---
 
@@ -229,6 +247,15 @@ npm run dev
 
 ---
 
+## 🔍 Troubleshooting & Notes
+
+- **TV Not Found During Wi-Fi Scan**: Ensure your phone and TV are on the same Wi-Fi band/subnet, **AP/Client Isolation** is disabled on your router, and **Nearby Devices** (Android 13+) or **Location** (Android 8–12) permission is granted. You can also add the TV directly via **Manual IP**.
+- **Universal IR Doesn't Respond**: Verify your phone has a built-in IR blaster, remove thick cases that may block the top IR window, and check if your TV uses an OS-specific IR code (for instance, try **Roku TV Universal** on a TCL/Hisense Roku TV, or **Amazon Fire TV** on an Insignia Fire TV).
+- **WSS / TLS Certificate Mismatch After TV Firmware Update**: Because NexusRemote enforces Trust-On-First-Use (TOFU) certificate pinning, delete and re-pair the saved TV if its self-signed local TLS certificate rotates after a TV OS reset or major firmware update (this also triggers cryptographic erasure of old keys).
+- **Power On Over Wi-Fi**: Many Smart TVs turn off their Wi-Fi adapter in deep standby. Use **Universal IR** or enable **Fast TV Start / Mobile TV On / IP Control** in your TV settings if you want wake-from-standby.
+
+---
+
 ## 🗂️ Project Structure
 
 ```
@@ -237,7 +264,7 @@ npm run dev
 │   └── android.yml                             # GitHub Actions CI/CD workflow for APK & Release builds
 ├── HISTORY.md                                  # Complete project chronicle & ADRs
 ├── README.md                                   # This file (features, install & use guide)
-├── android/                                    # Native Android Project
+├── android/                                    # Native Android Project (compileSdk 35 / minSdk 26)
 │   ├── build.gradle.kts                        # Root Gradle plugins (AGP 8.5.2, Kotlin 2.0.21, Compose)
 │   ├── settings.gradle.kts                     # Repositories & :app module inclusion
 │   ├── gradle.properties                       # JVM heap, AndroidX, non-transitive R class
@@ -245,7 +272,7 @@ npm run dev
 │       ├── build.gradle.kts                    # App dependencies & CI versionCode/versionName properties
 │       ├── proguard-rules.pro                  # ProGuard rules for Room, protocols & security
 │       └── src/main/
-│           ├── AndroidManifest.xml             # OWASP MASVS permissions & network security config
+│           ├── AndroidManifest.xml             # OWASP MASVS permissions, optional consumerir & network security config
 │           ├── res/
 │           │   ├── drawable/ic_launcher_foreground.xml
 │           │   ├── mipmap-anydpi-v26/          # Adaptive launcher icons
@@ -276,7 +303,7 @@ npm run dev
 │               │   ├── HisenseVidaaAdapter.kt  # Hisense VIDAA SSL TCP 5000 with TOFU TLS
 │               │   ├── PanasonicAdapter.kt     # Panasonic Viera UPnP SOAP 55000
 │               │   ├── AndroidTvRemoteAdapter.kt # Google Android TV Remote v2 TLS 6467 with TOFU TLS
-│               │   ├── ConsumerIrAdapter.kt    # ConsumerIrManager with hardware detection & brand DB
+│               │   ├── ConsumerIrAdapter.kt    # ConsumerIrManager with 23 verified TV profiles & 8 IR encoders
 │               │   └── ProtocolRegistry.kt     # Factory mapping SavedDevice to Protocol Adapter
 │               ├── viewmodel/
 │               │   └── NexusViewModels.kt      # DeviceManagementViewModel & RemoteControlViewModel
@@ -284,8 +311,9 @@ npm run dev
 │                   └── NexusMainScreen.kt      # Jetpack Compose UI with Foldable & Tablet Dual-Pane support
 └── src/                                        # Web Simulation Companion & Code Studio
     ├── App.tsx                                 # Companion app container
-    ├── components/                             # RemoteControl, TvSimulator, LogcatConsole, CodeViewer
-    └── data/                                   # Universal TV brand code databases & Kotlin files
+    ├── types.ts                                # Shared protocol, remote skin & TV profile types
+    ├── components/                             # RemoteControl (with CSS skins & search), TvSimulator, LogcatConsole, CodeViewer
+    └── data/                                   # Verified 23-model TV IR database (tvBrands.ts) & Kotlin snippets
 ```
 
 ---

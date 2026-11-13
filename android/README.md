@@ -42,7 +42,7 @@ android/app/src/main/
     │   ├── HisenseVidaaAdapter.kt   # Hisense VIDAA SSL TCP / RemoteNOW (5000) with TOFU TLS
     │   ├── PanasonicAdapter.kt      # Panasonic Viera UPnP SOAP (55000)
     │   ├── AndroidTvRemoteAdapter.kt  # Google Android TV Remote v2 TLS (6467) with TOFU TLS
-    │   ├── ConsumerIrAdapter.kt     # ConsumerIrManager with hardware detection & brand DB
+    │   ├── ConsumerIrAdapter.kt     # ConsumerIrManager with 23 verified TV profiles & 8 IR pulse encoders
     │   └── ProtocolRegistry.kt      # Factory mapping SavedDevice to Protocol Adapter
     │
     ├── viewmodel/
@@ -101,7 +101,49 @@ NexusRemote enforces strict cryptographic security and OWASP MASVS standards:
 | **Sony BRAVIA** | IRCC-IP / REST | HTTP SOAP | 80 | Pre-Shared Key (PSK) | No (D-Pad only) | Via REST | Yes (Remote Start) |
 | **Hisense VIDAA** | RemoteNOW | SSL TCP (TOFU) | 5000 | 4-digit PIN on TV | No (D-Pad only) | No | No (Needs WoL) |
 | **Panasonic** | Viera Network | UPnP SOAP | 55000 | Network Control 'ON' | No (D-Pad only) | No | Yes (Power On by App) |
-| **Universal IR** | Consumer IR | Optical IR | N/A | None (One-way) | No | No | Yes (IR Power Code) |
+| **Universal IR** | Consumer IR (8 encoders) | Optical IR (36–40 kHz) | N/A | None (One-way, 23 models) | No | No | Yes (IR Power Code) |
+
+---
+
+## 🎯 Universal Consumer IR: Supported TV Models & Protocols
+
+`ConsumerIrAdapter.kt` implements real `ConsumerIrManager.transmit()` pulse-timing encoders verified against **`probonopd/irdb`** and **`Lucaslhm/Flipper-IRDB`**:
+
+- **Supported Hardware Encoders (8)**:
+  - `NEC` (38 kHz, 8-bit address + inverse)
+  - `NEC_EXT` (38 kHz, 16-bit extended address + subAddress)
+  - `SAMSUNG` (38 kHz NECx2, 4.5 ms leader + address/subAddress)
+  - `SONY_SIRC` (40 kHz 12-bit pulse-width modulation)
+  - `RC5` (36 kHz Manchester bi-phase with alternating toggle bit)
+  - `RC6` (36 kHz Philips Mode 0 Manchester with double-width trailer bit)
+  - `PANASONIC` (37 kHz 48-bit Kaseikyo with OEM `0x02:0x20` + XOR checksum)
+  - `RCA` (38 kHz RCA-38 24-bit MSB-first pulse-distance)
+
+| # | Brand / Profile | Supported Series / OS | Protocol | Freq | Addr / Sub | Source |
+|---|---|---|---|---|---|---|
+| 1 | **Samsung** | Neo QLED / OLED / Crystal 4K | `SAMSUNG` | 38 kHz | `0x07` / `0x07` | `probonopd/irdb · Samsung/TV/7,7.csv` |
+| 2 | **LG Electronics** | webOS OLED C3 / QNED / NanoCell | `NEC` | 38 kHz | `0x04` | `probonopd/irdb · 4,-1.csv` & `Flipper-IRDB LG_OLED48C37LA` |
+| 3 | **Sony Bravia** | XR OLED / X80K / Google TV | `SONY_SIRC` | 40 kHz | `0x01` | `probonopd/irdb · 1,-1.csv` & `Flipper-IRDB Sony_KD-55X80CK` |
+| 4 | **Roku TV Universal** | TCL / Hisense / Onn / Insignia / RCA Roku OS | `NEC_EXT` | 38 kHz | `0xEA` / `0xC7` | `Flipper-IRDB · TCL_32S327 & Onn_Roku_TV.ir` |
+| 5 | **TCL Google TV** | QLED C635 / S4 / QM8 Android & Google TV | `RCA` | 38 kHz | `0x0F` | `probonopd/irdb · TCL/15,-1.csv` & `Flipper-IRDB TCL_65C635K` |
+| 6 | **Hisense VIDAA** | E7K / A4H / ULED Smart TV | `NEC_EXT` | 38 kHz | `0x00` / `0xBF` | `Flipper-IRDB · Hisense_55E7KQ & 32A4HAU.ir` |
+| 7 | **Hisense Google TV** | U6K / U7G / U8K Mini-LED | `NEC` | 38 kHz | `0x04` | `Flipper-IRDB · Hisense_55U6K & Hisense_U7G.ir` |
+| 8 | **Vizio SmartCast** | M-Series Quantum / V-Series / P-Series | `NEC` | 38 kHz | `0x04` | `probonopd/irdb · Vizio/4,-1.csv` & `Flipper-IRDB Vizio.ir` |
+| 9 | **Panasonic Viera** | JX800 / OLED / 4K Pro Studio | `PANASONIC` | 37 kHz | `0x80` / `0x00` | `probonopd/irdb · Panasonic/128,0.csv` & `Flipper-IRDB` |
+| 10 | **Philips OLED / Android** | Ambilight 806 OLED / PUS Android TV | `RC6` | 36 kHz | `0x00` | `Flipper-IRDB · Philips_TV_48OLED806 & Universal.ir` |
+| 11 | **Philips Classic** | PFL Smart LED / Legacy Ambilight | `RC5` | 36 kHz | `0x00` | `probonopd/irdb · Philips/TV/0,-1.csv` |
+| 12 | **Amazon Fire TV** | Omni Series 4K / 4-Series / Insignia Fire TV | `NEC_EXT` | 38 kHz | `0x02` / `0x7D` | `Flipper-IRDB · FireTV_Omni_Series_4K.ir` |
+| 13 | **Toshiba Fire TV** | C350 / LF421U Fire TV Edition | `NEC_EXT` | 38 kHz | `0x02` / `0x7D` | `Flipper-IRDB · Toshiba_50C350LC & 43LF421U21.ir` |
+| 14 | **Toshiba Regza** | AV / L-Series Standard HDTV | `NEC` | 38 kHz | `0x40` | `probonopd/irdb · Toshiba/64,-1.csv` & `32AV502U.ir` |
+| 15 | **Sharp Aquos** | 4K UHD / BG3E / Smart LED | `NEC_EXT` | 38 kHz | `0x00` / `0x7F` | `Flipper-IRDB · Sharp/Aquos.ir & 32BG3E.ir` |
+| 16 | **Insignia / Dynex** | NS-Series / DX-Series LED HDTV | `NEC_EXT` | 38 kHz | `0x86` / `0x05` | `probonopd/irdb · Insignia/134,5.csv` & `Flipper-IRDB` |
+| 17 | **Element / Westinghouse** | 100-Series / RMT Smart LED TV | `NEC_EXT` | 38 kHz | `0x02` / `0x7D` | `Flipper-IRDB · Element_100-Series & Westinghouse.ir` |
+| 18 | **Sanyo** | DP / FW Series LCD & LED TV | `NEC` | 38 kHz | `0x38` | `probonopd/irdb · Sanyo/56,-1.csv` & `Sanyo_DP26640.ir` |
+| 19 | **RCA Classic** | CRK / Classic HD & LED Series | `RCA` | 38 kHz | `0x0F` | `probonopd/irdb · RCA/TV/15,-1.csv` |
+| 20 | **RCA LED (NEC)** | RLDED Series Budget LED TV | `NEC` | 38 kHz | `0x20` | `Flipper-IRDB · RCA_RLDED3258A-B.ir` |
+| 21 | **Hitachi / JVC Smart** | RC43140 / Vestel / 4K Smart TV | `RC5` | 36 kHz | `0x03` | `Flipper-IRDB · Hitachi_RC43140.ir` |
+| 22 | **Sceptre** | X50 / U-Series 4K UHD LED | `SONY_SIRC` | 40 kHz | `0x01` | `Flipper-IRDB · Sceptre_X50_Series.ir` |
+| 23 | **Haier** | L42 / Smart Android LED TV | `NEC` | 38 kHz | `0x04` | `Flipper-IRDB · Haier_L42C1180.ir` |
 
 ---
 
@@ -122,15 +164,15 @@ NexusRemote enforces strict cryptographic security and OWASP MASVS standards:
 
 ## 🛠️ Installation & Device Setup Guide
 
-### 1. Installation on a Physical Android Device
-1. Enable **Developer Options** and **USB Debugging** on your phone (*Settings > About Phone > Tap 'Build Number' 7 times*).
-2. Connect your phone via USB or build an APK:
-   ```bash
-   cd android
-   ./gradlew assembleDebug
-   adb install -r app/build/outputs/apk/debug/app-debug.apk
-   ```
-3. Grant **Local Network / Nearby Devices** permission when prompted on first launch.
+### 1. Installing from GitHub Releases (Recommended)
+- **Supported Android Versions**: Android **8.0 (API 26)** through Android **15 (API 35)** (`compileSdk = 35`, `targetSdk = 35`).
+1. On your Android device, open the repository's **Releases** page on GitHub and download the latest `app-debug-*.apk` (built automatically by `.github/workflows/android.yml`).
+2. Tap the downloaded APK file in your browser or file manager. If prompted, enable **Allow from this source** (*Install unknown apps*) in Android Settings, then tap **Install**.
+3. Open **NexusRemote** and grant **Nearby Devices** (Android 13+) or **Location** (Android 8.0–12) if prompted for Wi-Fi TV discovery. Universal IR mode works immediately offline without network permissions if your phone includes an IR emitter.
 
-### 2. Local Network Permissions
-Android 13+ requires the `NEARBY_WIFI_DEVICES` permission with `android:usesPermissionFlags="neverForLocation"` in `AndroidManifest.xml`. On Android 8.0–12, `ACCESS_FINE_LOCATION` is scoped with `android:maxSdkVersion="32"` to allow subnet discovery without requiring GPS permissions on modern versions.
+### 2. Building from Source (Developers Only)
+Open the `android/` folder in **Android Studio (Jellyfish / Koala or newer)** with **JDK 17** and **Android SDK 35**, or push a `v*` tag to trigger an automated APK build and GitHub Release via GitHub Actions.
+
+### 3. Permissions & Hardware Declarations
+- **Local Network Permissions**: Android 13+ uses `NEARBY_WIFI_DEVICES` with `android:usesPermissionFlags="neverForLocation"` in `AndroidManifest.xml`. On Android 8.0–12, `ACCESS_FINE_LOCATION` is scoped with `android:maxSdkVersion="32"` so modern devices never prompt for GPS/location access.
+- **IR Hardware Optional**: `android.permission.TRANSMIT_IR` is declared alongside `<uses-feature android:name="android.hardware.consumerir" android:required="false" />`, allowing devices without an IR blaster to install and run all Wi-Fi Smart TV protocols normally.

@@ -116,6 +116,13 @@ This document records the chronological history, engineering decisions, architec
 
 ---
 
+### Milestone 9: Verified Universal IR Database Expansion & Web Remote Skinning
+- **Trusted IR Database Verification**: Expanded the Universal IR profile catalog from 10 placeholder entries to **23 verified TV models/series** cross-checked against **`probonopd/irdb`** and **`Lucaslhm/Flipper-IRDB`** (fixing legacy Vizio, Toshiba Regza, Panasonic, TCL, Hisense, and Sharp profiles and adding Roku TV Universal, Amazon Fire TV, Toshiba Fire TV, Philips OLED RC6, Insignia/Dynex, Element/Westinghouse, Sanyo, RCA Classic & LED, Hitachi/JVC, Sceptre, and Haier).
+- **Extended Android Hardware Encoders (`ConsumerIrAdapter.kt`)**: Implemented native `ConsumerIrManager` waveform encoders for `NEC_EXT` (16-bit extended), `PANASONIC` (48-bit Kaseikyo at 37 kHz), `RCA` (RCA-38 24-bit MSB-first), and `RC6` (Mode 0 Manchester with double-width trailer bit), alongside a searchable model/protocol selector in `NexusMainScreen.kt`.
+- **Web Remote Visual Skinning (`src/`)**: Added a CSS-based skinning system allowing users to switch between **Classic Infrared**, **Modern Streaming**, and **Minimalist** remote styles with a searchable 23-model TV selector.
+
+---
+
 ## 📈 Architecture Decision Records (ADRs)
 
 | ADR ID | Decision Title | Status | Rationale |
