@@ -43,6 +43,16 @@ android {
     buildFeatures {
         compose = true
     }
+
+    applicationVariants.all {
+        val variantName = name
+        outputs.all {
+            val output = this as? com.android.build.gradle.internal.api.BaseVariantOutputImpl
+            if (output != null) {
+                output.outputFileName = "NexusRemote-$ciVersionName-$variantName.apk"
+            }
+        }
+    }
 }
 
 dependencies {

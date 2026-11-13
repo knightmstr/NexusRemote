@@ -166,7 +166,7 @@ NexusRemote enforces strict cryptographic security and OWASP MASVS standards:
 
 ### 1. Installing from GitHub Releases (Recommended)
 - **Supported Android Versions**: Android **8.0 (API 26)** through Android **15 (API 35)** (`compileSdk = 35`, `targetSdk = 35`).
-1. On your Android device, open the repository's **Releases** page on GitHub and download the latest `app-debug-*.apk` (built automatically by `.github/workflows/android.yml`).
+1. On your Android device, open the repository's **Releases** page on GitHub and download the latest `NexusRemote-*-debug.apk` (built automatically by `.github/workflows/android.yml`).
 2. Tap the downloaded APK file in your browser or file manager. If prompted, enable **Allow from this source** (*Install unknown apps*) in Android Settings, then tap **Install**.
 3. Open **NexusRemote** and grant **Nearby Devices** (Android 13+) or **Location** (Android 8.0–12) if prompted for Wi-Fi TV discovery. Universal IR mode works immediately offline without network permissions if your phone includes an IR emitter.
 

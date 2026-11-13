@@ -57,7 +57,7 @@ jobs:
       - name: Upload Workflow Artifact
         uses: actions/upload-artifact@v6
         with:
-          name: app-debug-${{ env.VERSION_NAME }}
+          name: NexusRemote-${{ env.VERSION_NAME }}-debug
           path: android/app/build/outputs/apk/debug/*.apk
 
       - name: Create GitHub Release
