@@ -33,7 +33,13 @@ class MainActivity : ComponentActivity() {
             object : ViewModelProvider.Factory {
                 @Suppress("UNCHECKED_CAST")
                 override fun <T : ViewModel> create(modelClass: Class<T>): T {
-                    return DeviceManagementViewModel(deviceDao, discoveryManager, devicePreferences, keystoreSecretManager) as T
+                    return DeviceManagementViewModel(
+                        deviceDao,
+                        discoveryManager,
+                        devicePreferences,
+                        keystoreSecretManager,
+                        applicationContext
+                    ) as T
                 }
             }
         )[DeviceManagementViewModel::class.java]
