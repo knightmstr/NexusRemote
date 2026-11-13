@@ -292,7 +292,7 @@ class KeystoreSecretManager(private val context: Context) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
                 try {
                     val strongBoxSpec = builder.setIsStrongBoxBacked(true).build()
-                    keyPairGenerator.init(strongBoxSpec)
+                    keyPairGenerator.initialize(strongBoxSpec)
                     keyPairGenerator.generateKeyPair()
                     Log.i(TAG, "Generated StrongBox-backed RSA-2048 key pair for ADB authentication")
                     return
@@ -305,7 +305,7 @@ class KeystoreSecretManager(private val context: Context) {
                 builder.setIsStrongBoxBacked(false)
             }
             val standardSpec = builder.build()
-            keyPairGenerator.init(standardSpec)
+            keyPairGenerator.initialize(standardSpec)
             keyPairGenerator.generateKeyPair()
             Log.i(TAG, "Generated TEE-backed RSA-2048 key pair for ADB authentication")
         }
