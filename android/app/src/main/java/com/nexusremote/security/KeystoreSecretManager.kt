@@ -242,7 +242,8 @@ class KeystoreSecretManager(private val context: Context) {
                 val word = rr.shiftRight(i * 32).and(mask32).toLong().toInt()
                 buffer.putInt(word)
             }
-
+// after the rr loop, before buffer.array()
+buffer.putInt(rsaPubKey.publicExponent.toInt()) // 65537
             buffer.array()
         } catch (e: Exception) {
             Log.e(TAG, "Failed constructing 524-byte ADB RSAPublicKey struct: ${e.message}", e)
