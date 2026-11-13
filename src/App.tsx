@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { RemoteMode, ConnectionStatus, InstalledApp, LogEntry, IrPulseEvent, TvBrandProfile } from './types';
+import { RemoteMode, RemoteSkin, ConnectionStatus, InstalledApp, LogEntry, IrPulseEvent, TvBrandProfile } from './types';
 import { UNIVERSAL_TV_BRANDS } from './data/tvBrands';
 import { RemoteControl } from './components/RemoteControl';
 import { TvSimulator } from './components/TvSimulator';
@@ -77,6 +77,17 @@ export default function App() {
 
   // Unified Remote State
   const [remoteMode, setRemoteMode] = useState<RemoteMode>('WI_FI');
+  const [remoteSkin, setRemoteSkin] = useState<RemoteSkin>(() => {
+    try {
+      const saved = localStorage.getItem('nexus_remote_skin');
+      if (saved === 'classic-ir' || saved === 'modern-streaming' || saved === 'minimalist') {
+        return saved;
+      }
+    } catch {
+      // Ignore storage access errors
+    }
+    return 'modern-streaming';
+  });
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('CONNECTED');
   const [targetIp, setTargetIp] = useState('192.168.1.150');
   const [hasIrEmitter, setHasIrEmitter] = useState(true);
@@ -113,7 +124,7 @@ export default function App() {
       timestamp: '17:12:00.110',
       tag: 'InfraredManager',
       level: 'I',
-      message: 'Universal IR loaded 10 TV profiles: Samsung (38kHz), LG (38kHz), Sony Bravia (40kHz), TCL, Hisense, Vizio, Panasonic, Philips (36kHz), Sharp, Toshiba.',
+      message: `Universal IR loaded ${UNIVERSAL_TV_BRANDS.length} verified TV profiles (probonopd/irdb & Flipper-IRDB) across NEC, NEC_EXT, Samsung, SIRC, RC5, RC6, Kaseikyo, and RCA.`,
     },
     {
       id: '3',
@@ -182,7 +193,7 @@ export default function App() {
     addLog(
       'InfraredManager',
       'D',
-      `Hardware tuned: Carrier=${brand.carrierFrequencyHz / 1000} kHz, Protocol=${brand.protocol}, Address=0x${brand.address.toString(16).toUpperCase()}`
+      `Hardware tuned: Carrier=${brand.carrierFrequencyHz / 1000} kHz, Protocol=${brand.protocol}, Address=0x${brand.address.toString(16).toUpperCase()}${brand.subAddress !== undefined ? `:0x${brand.subAddress.toString(16).toUpperCase()}` : ''} [${brand.source}]`
     );
     addLog(
       'RemoteViewModel',
@@ -204,6 +215,22 @@ export default function App() {
           : 'ADB TCP/IP (port 5555)'
       }`
     );
+  };
+
+  // Remote CSS Skin Change
+  const handleChangeSkin = (skin: RemoteSkin) => {
+    setRemoteSkin(skin);
+    try {
+      localStorage.setItem('nexus_remote_skin', skin);
+    } catch {
+      // Ignore storage access errors
+    }
+    const labelMap: Record<RemoteSkin, string> = {
+      'classic-ir': 'Classic Infrared',
+      'modern-streaming': 'Modern Streaming',
+      minimalist: 'Minimalist',
+    };
+    addLog('RemoteViewModel', 'D', `Applied CSS Remote Skin: ${labelMap[skin]} ([data-remote-skin="${skin}"])`);
   };
 
   // Network Connection Handling
@@ -531,6 +558,7 @@ export default function App() {
 
               <RemoteControl
                 remoteMode={remoteMode}
+                skin={remoteSkin}
                 connectionStatus={connectionStatus}
                 targetIp={targetIp}
                 hasIrEmitter={hasIrEmitter}
@@ -539,6 +567,7 @@ export default function App() {
                 appDockList={apps}
                 lastIrPulse={lastIrPulse}
                 onSetRemoteMode={handleSetRemoteMode}
+                onChangeSkin={handleChangeSkin}
                 onSelectBrand={handleSelectBrand}
                 onConnectIp={handleConnectIp}
                 onDisconnectIp={handleDisconnectIp}
@@ -631,7 +660,7 @@ export default function App() {
           <span>Principal Android Hardware & Network Architecture</span>
           <span>•</span>
           <span className="font-mono text-slate-400">
-            ConsumerIrManager Universal Remote (10 Brands) • Preferences DataStore • Dispatchers.IO
+            ConsumerIrManager Universal Remote ({UNIVERSAL_TV_BRANDS.length} Verified Models) • Preferences DataStore • Dispatchers.IO
           </span>
         </div>
         <div className="font-mono text-[11px] text-slate-500">

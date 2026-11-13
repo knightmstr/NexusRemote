@@ -1,1 +1,521 @@
 @import "tailwindcss";
+
+/* ==========================================================================
+   RemoteControl CSS Custom-Property Skinning System
+   Skins:
+     1. modern-streaming (Obsidian anodized glass-slate, sky/rose LEDs)
+     2. classic-ir       (Vintage rubberized charcoal ABS hardware, 3D tactile keys)
+     3. minimalist       (Architectural matte anodized silver-white, crisp monochrome)
+   ========================================================================== */
+
+[data-remote-skin] {
+  --rc-transition: 180ms cubic-bezier(0.16, 1, 0.3, 1);
+  color: var(--rc-text-primary);
+}
+
+/* 1. MODERN STREAMING (Default Dark Obsidian Hardware) */
+[data-remote-skin="modern-streaming"] {
+  --rc-chassis-bg: linear-gradient(180deg, #0f172a 0%, #0b1120 55%, #020617 100%);
+  --rc-chassis-border: #1e293b;
+  --rc-chassis-ring: rgba(51, 65, 85, 0.55);
+  --rc-chassis-radius: 44px;
+  --rc-chassis-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.9);
+
+  --rc-emitter-bg: #1e293b;
+  --rc-emitter-border: rgba(51, 65, 85, 0.85);
+  --rc-emitter-active-bg: #f43f5e;
+  --rc-emitter-active-glow: 0 0 24px 8px rgba(244, 63, 94, 0.9);
+
+  --rc-panel-bg: rgba(15, 23, 42, 0.92);
+  --rc-panel-border: rgba(30, 41, 59, 0.9);
+  --rc-panel-radius: 16px;
+
+  --rc-surface-bg: #1e293b;
+  --rc-surface-hover: #283548;
+  --rc-surface-border: rgba(51, 65, 85, 0.75);
+
+  --rc-btn-bg: #1e293b;
+  --rc-btn-hover: #334155;
+  --rc-btn-border: rgba(51, 65, 85, 0.75);
+  --rc-btn-radius: 16px;
+  --rc-btn-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+  --rc-btn-active-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+  --rc-btn-active-y: 1px;
+
+  --rc-seg-track-bg: #020617;
+  --rc-seg-track-border: #1e293b;
+
+  --rc-text-primary: #f8fafc;
+  --rc-text-secondary: #94a3b8;
+  --rc-text-muted: #64748b;
+
+  --rc-accent-ir-bg: #1e293b;
+  --rc-accent-ir-text: #fb7185;
+  --rc-accent-ir-border: rgba(244, 63, 94, 0.35);
+
+  --rc-accent-wifi-bg: #0284c7;
+  --rc-accent-wifi-text: #ffffff;
+  --rc-accent-wifi-border: rgba(56, 189, 248, 0.4);
+
+  --rc-power-bg: #e11d48;
+  --rc-power-hover: #f43f5e;
+  --rc-power-border: rgba(251, 113, 133, 0.35);
+  --rc-power-text: #ffffff;
+
+  --rc-input-icon: #fbbf24;
+  --rc-input-border: rgba(245, 158, 11, 0.35);
+
+  --rc-search-bg: rgba(8, 47, 73, 0.85);
+  --rc-search-hover: #0c4a6e;
+  --rc-search-border: rgba(14, 165, 233, 0.55);
+  --rc-search-icon: #7dd3fc;
+  --rc-search-label: #38bdf8;
+
+  --rc-dpad-bg: linear-gradient(45deg, #020617 0%, #0f172a 50%, #1e293b 100%);
+  --rc-dpad-border: rgba(51, 65, 85, 0.65);
+  --rc-dpad-shadow: 0 20px 40px rgba(0, 0, 0, 0.65);
+
+  --rc-ok-bg: linear-gradient(45deg, #0284c7 0%, #3b82f6 100%);
+  --rc-ok-hover: linear-gradient(45deg, #0ea5e9 0%, #60a5fa 100%);
+  --rc-ok-border: rgba(125, 211, 252, 0.45);
+  --rc-ok-text: #ffffff;
+
+  --rc-pill-online-bg: rgba(5, 46, 22, 0.82);
+  --rc-pill-online-border: rgba(34, 197, 94, 0.5);
+  --rc-pill-online-text: #6ee7b7;
+
+  --rc-pill-auth-bg: rgba(69, 26, 3, 0.85);
+  --rc-pill-auth-border: rgba(245, 158, 11, 0.5);
+  --rc-pill-auth-text: #fcd34d;
+
+  --rc-pill-offline-bg: rgba(76, 5, 25, 0.65);
+  --rc-pill-offline-border: rgba(244, 63, 94, 0.45);
+  --rc-pill-offline-text: #fda4af;
+
+  --rc-badge-bg: #0f172a;
+  --rc-badge-border: #334155;
+  --rc-badge-text: #7dd3fc;
+
+  --rc-kbd-del-bg: rgba(76, 5, 25, 0.75);
+  --rc-kbd-del-hover: rgba(136, 19, 55, 0.85);
+  --rc-kbd-del-text: #fda4af;
+}
+
+/* 2. CLASSIC INFRARED (Tactile Vintage Charcoal Plastic & Rubberized 3D Keys) */
+[data-remote-skin="classic-ir"] {
+  --rc-chassis-bg:
+    repeating-linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0.015) 0px,
+      rgba(255, 255, 255, 0.015) 1px,
+      transparent 1px,
+      transparent 3px
+    ),
+    linear-gradient(180deg, #2b2b30 0%, #1f1f24 55%, #141418 100%);
+  --rc-chassis-border: #3f3f46;
+  --rc-chassis-ring: rgba(161, 161, 170, 0.25);
+  --rc-chassis-radius: 22px;
+  --rc-chassis-shadow:
+    inset 0 2px 3px rgba(255, 255, 255, 0.08),
+    0 24px 50px -12px rgba(0, 0, 0, 0.92);
+
+  --rc-emitter-bg: linear-gradient(180deg, #450a0a 0%, #7f1d1d 100%);
+  --rc-emitter-border: #52525b;
+  --rc-emitter-active-bg: #ef4444;
+  --rc-emitter-active-glow: 0 0 22px 7px rgba(239, 68, 68, 0.9);
+
+  --rc-panel-bg: #18181b;
+  --rc-panel-border: #3f3f46;
+  --rc-panel-radius: 10px;
+
+  --rc-surface-bg: #27272a;
+  --rc-surface-hover: #3f3f46;
+  --rc-surface-border: #52525b;
+
+  --rc-btn-bg: linear-gradient(180deg, #3a3a42 0%, #27272d 100%);
+  --rc-btn-hover: linear-gradient(180deg, #474752 0%, #32323a 100%);
+  --rc-btn-border: #52525b;
+  --rc-btn-radius: 8px;
+  --rc-btn-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.16),
+    0 3px 0 #09090b,
+    0 4px 8px rgba(0, 0, 0, 0.55);
+  --rc-btn-active-shadow:
+    inset 0 1px 2px rgba(0, 0, 0, 0.6),
+    0 1px 0 #09090b;
+  --rc-btn-active-y: 2px;
+
+  --rc-seg-track-bg: #111114;
+  --rc-seg-track-border: #3f3f46;
+
+  --rc-text-primary: #fafafa;
+  --rc-text-secondary: #d4d4d8;
+  --rc-text-muted: #a1a1aa;
+
+  --rc-accent-ir-bg: linear-gradient(180deg, #7f1d1d 0%, #450a0a 100%);
+  --rc-accent-ir-text: #fecaca;
+  --rc-accent-ir-border: rgba(248, 113, 113, 0.55);
+
+  --rc-accent-wifi-bg: linear-gradient(180deg, #d97706 0%, #b45309 100%);
+  --rc-accent-wifi-text: #ffffff;
+  --rc-accent-wifi-border: rgba(251, 191, 36, 0.6);
+
+  --rc-power-bg: linear-gradient(180deg, #ef4444 0%, #b91c1c 100%);
+  --rc-power-hover: linear-gradient(180deg, #f87171 0%, #dc2626 100%);
+  --rc-power-border: #fca5a5;
+  --rc-power-text: #ffffff;
+
+  --rc-input-icon: #fbbf24;
+  --rc-input-border: rgba(245, 158, 11, 0.55);
+
+  --rc-search-bg: linear-gradient(180deg, #3a3a42 0%, #27272d 100%);
+  --rc-search-hover: linear-gradient(180deg, #4b4b56 0%, #34343d 100%);
+  --rc-search-border: #f59e0b;
+  --rc-search-icon: #fbbf24;
+  --rc-search-label: #fbbf24;
+
+  --rc-dpad-bg: radial-gradient(circle at 35% 30%, #3f3f46 0%, #27272a 55%, #18181b 100%);
+  --rc-dpad-border: #71717a;
+  --rc-dpad-shadow:
+    inset 0 2px 6px rgba(255, 255, 255, 0.14),
+    0 12px 28px rgba(0, 0, 0, 0.75);
+
+  --rc-ok-bg: linear-gradient(145deg, #f59e0b 0%, #d97706 100%);
+  --rc-ok-hover: linear-gradient(145deg, #fbbf24 0%, #f59e0b 100%);
+  --rc-ok-border: #fde68a;
+  --rc-ok-text: #18181b;
+
+  --rc-pill-online-bg: #14532d;
+  --rc-pill-online-border: #22c55e;
+  --rc-pill-online-text: #bbf7d0;
+
+  --rc-pill-auth-bg: #78350f;
+  --rc-pill-auth-border: #f59e0b;
+  --rc-pill-auth-text: #fef08a;
+
+  --rc-pill-offline-bg: #450a0a;
+  --rc-pill-offline-border: #ef4444;
+  --rc-pill-offline-text: #fecaca;
+
+  --rc-badge-bg: #18181b;
+  --rc-badge-border: #52525b;
+  --rc-badge-text: #fbbf24;
+
+  --rc-kbd-del-bg: #7f1d1d;
+  --rc-kbd-del-hover: #991b1b;
+  --rc-kbd-del-text: #fecaca;
+}
+
+/* 3. MINIMALIST (Architectural Matte Silver-White Monochrome) */
+[data-remote-skin="minimalist"] {
+  --rc-chassis-bg: linear-gradient(180deg, #ffffff 0%, #f8fafc 60%, #f1f5f9 100%);
+  --rc-chassis-border: #cbd5e1;
+  --rc-chassis-ring: rgba(148, 163, 184, 0.35);
+  --rc-chassis-radius: 34px;
+  --rc-chassis-shadow: 0 22px 50px -15px rgba(15, 23, 42, 0.25);
+
+  --rc-emitter-bg: #e2e8f0;
+  --rc-emitter-border: #cbd5e1;
+  --rc-emitter-active-bg: #e11d48;
+  --rc-emitter-active-glow: 0 0 18px 5px rgba(225, 29, 72, 0.65);
+
+  --rc-panel-bg: #ffffff;
+  --rc-panel-border: #e2e8f0;
+  --rc-panel-radius: 14px;
+
+  --rc-surface-bg: #f1f5f9;
+  --rc-surface-hover: #e2e8f0;
+  --rc-surface-border: #cbd5e1;
+
+  --rc-btn-bg: #ffffff;
+  --rc-btn-hover: #f1f5f9;
+  --rc-btn-border: #e2e8f0;
+  --rc-btn-radius: 14px;
+  --rc-btn-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+  --rc-btn-active-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.12);
+  --rc-btn-active-y: 1px;
+
+  --rc-seg-track-bg: #e2e8f0;
+  --rc-seg-track-border: #cbd5e1;
+
+  --rc-text-primary: #0f172a;
+  --rc-text-secondary: #475569;
+  --rc-text-muted: #64748b;
+
+  --rc-accent-ir-bg: #18181b;
+  --rc-accent-ir-text: #ffffff;
+  --rc-accent-ir-border: #18181b;
+
+  --rc-accent-wifi-bg: #0f172a;
+  --rc-accent-wifi-text: #ffffff;
+  --rc-accent-wifi-border: #0f172a;
+
+  --rc-power-bg: #ffffff;
+  --rc-power-hover: #fff1f2;
+  --rc-power-border: #fda4af;
+  --rc-power-text: #e11d48;
+
+  --rc-input-icon: #0f172a;
+  --rc-input-border: #cbd5e1;
+
+  --rc-search-bg: #0f172a;
+  --rc-search-hover: #1e293b;
+  --rc-search-border: #0f172a;
+  --rc-search-icon: #ffffff;
+  --rc-search-label: #0f172a;
+
+  --rc-dpad-bg: #f8fafc;
+  --rc-dpad-border: #cbd5e1;
+  --rc-dpad-shadow: 0 6px 18px rgba(15, 23, 42, 0.08);
+
+  --rc-ok-bg: #0f172a;
+  --rc-ok-hover: #1e293b;
+  --rc-ok-border: #0f172a;
+  --rc-ok-text: #ffffff;
+
+  --rc-pill-online-bg: #ecfdf5;
+  --rc-pill-online-border: #6ee7b7;
+  --rc-pill-online-text: #065f46;
+
+  --rc-pill-auth-bg: #fffbeb;
+  --rc-pill-auth-border: #fcd34d;
+  --rc-pill-auth-text: #92400e;
+
+  --rc-pill-offline-bg: #fff1f2;
+  --rc-pill-offline-border: #fda4af;
+  --rc-pill-offline-text: #9f1239;
+
+  --rc-badge-bg: #f1f5f9;
+  --rc-badge-border: #cbd5e1;
+  --rc-badge-text: #0f172a;
+
+  --rc-kbd-del-bg: #ffe4e6;
+  --rc-kbd-del-hover: #fecdd3;
+  --rc-kbd-del-text: #9f1239;
+}
+
+/* ==========================================================================
+   Semantic Skinned Utility Classes for RemoteControl.tsx
+   ========================================================================== */
+
+.rc-chassis {
+  background: var(--rc-chassis-bg);
+  border: 4px solid var(--rc-chassis-border);
+  border-radius: var(--rc-chassis-radius);
+  box-shadow: var(--rc-chassis-shadow), 0 0 0 1px var(--rc-chassis-ring);
+  color: var(--rc-text-primary);
+  transition: background var(--rc-transition), border-color var(--rc-transition),
+    border-radius var(--rc-transition), box-shadow var(--rc-transition);
+}
+
+.rc-emitter {
+  background: var(--rc-emitter-bg);
+  border: 2px solid var(--rc-emitter-border);
+  transition: transform var(--rc-transition), box-shadow var(--rc-transition),
+    background var(--rc-transition);
+}
+
+.rc-emitter--active {
+  background: var(--rc-emitter-active-bg);
+  box-shadow: var(--rc-emitter-active-glow);
+  transform: scale(1.1);
+}
+
+.rc-panel {
+  background: var(--rc-panel-bg);
+  border: 1px solid var(--rc-panel-border);
+  border-radius: var(--rc-panel-radius);
+  transition: background var(--rc-transition), border-color var(--rc-transition),
+    border-radius var(--rc-transition);
+}
+
+.rc-surface-btn {
+  background: var(--rc-surface-bg);
+  border: 1px solid var(--rc-surface-border);
+  color: var(--rc-text-primary);
+  transition: background var(--rc-transition), transform var(--rc-transition);
+}
+
+.rc-surface-btn:hover {
+  background: var(--rc-surface-hover);
+}
+
+.rc-seg-track {
+  background: var(--rc-seg-track-bg);
+  border: 1px solid var(--rc-seg-track-border);
+  border-radius: var(--rc-panel-radius);
+}
+
+.rc-seg-ir-active {
+  background: var(--rc-accent-ir-bg);
+  color: var(--rc-accent-ir-text);
+  border: 1px solid var(--rc-accent-ir-border);
+}
+
+.rc-seg-wifi-active {
+  background: var(--rc-accent-wifi-bg);
+  color: var(--rc-accent-wifi-text);
+  border: 1px solid var(--rc-accent-wifi-border);
+}
+
+.rc-seg-idle {
+  color: var(--rc-text-muted);
+}
+
+.rc-seg-idle:hover {
+  color: var(--rc-text-primary);
+}
+
+.rc-key {
+  background: var(--rc-btn-bg);
+  border: 1px solid var(--rc-btn-border);
+  border-radius: var(--rc-btn-radius);
+  box-shadow: var(--rc-btn-shadow);
+  color: var(--rc-text-primary);
+  transition: transform 110ms ease, background var(--rc-transition),
+    box-shadow 110ms ease;
+}
+
+.rc-key:hover {
+  background: var(--rc-btn-hover);
+}
+
+.rc-key:active {
+  box-shadow: var(--rc-btn-active-shadow);
+  transform: translateY(var(--rc-btn-active-y));
+}
+
+.rc-power-key {
+  background: var(--rc-power-bg);
+  border: 1px solid var(--rc-power-border);
+  color: var(--rc-power-text);
+  box-shadow: var(--rc-btn-shadow);
+  transition: transform 110ms ease, background var(--rc-transition);
+}
+
+.rc-power-key:hover {
+  background: var(--rc-power-hover);
+}
+
+.rc-power-key:active {
+  transform: translateY(var(--rc-btn-active-y));
+}
+
+.rc-input-key {
+  background: var(--rc-btn-bg);
+  border: 1px solid var(--rc-input-border);
+  color: var(--rc-input-icon);
+  box-shadow: var(--rc-btn-shadow);
+  transition: transform 110ms ease, background var(--rc-transition);
+}
+
+.rc-input-key:hover {
+  background: var(--rc-btn-hover);
+}
+
+.rc-input-key:active {
+  transform: translateY(var(--rc-btn-active-y));
+}
+
+.rc-search-key {
+  background: var(--rc-search-bg);
+  border: 1px solid var(--rc-search-border);
+  color: var(--rc-search-icon);
+  box-shadow: var(--rc-btn-shadow);
+  transition: transform 110ms ease, background var(--rc-transition);
+}
+
+.rc-search-key:hover {
+  background: var(--rc-search-hover);
+}
+
+.rc-search-key:active {
+  transform: translateY(var(--rc-btn-active-y));
+}
+
+.rc-dpad {
+  background: var(--rc-dpad-bg);
+  border: 4px solid var(--rc-dpad-border);
+  box-shadow: var(--rc-dpad-shadow);
+  transition: background var(--rc-transition), border-color var(--rc-transition);
+}
+
+.rc-dpad-arrow {
+  color: var(--rc-text-secondary);
+  transition: color 120ms ease, background 120ms ease, transform 100ms ease;
+}
+
+.rc-dpad-arrow:hover {
+  color: var(--rc-text-primary);
+  background: var(--rc-surface-hover);
+}
+
+.rc-ok-key {
+  background: var(--rc-ok-bg);
+  border: 1px solid var(--rc-ok-border);
+  color: var(--rc-ok-text);
+  box-shadow: var(--rc-btn-shadow);
+  transition: transform 120ms ease, background var(--rc-transition);
+}
+
+.rc-ok-key:hover {
+  background: var(--rc-ok-hover);
+}
+
+.rc-ok-key:active {
+  transform: scale(0.93);
+}
+
+.rc-pill-online {
+  background: var(--rc-pill-online-bg);
+  border-color: var(--rc-pill-online-border);
+  color: var(--rc-pill-online-text);
+}
+
+.rc-pill-auth {
+  background: var(--rc-pill-auth-bg);
+  border-color: var(--rc-pill-auth-border);
+  color: var(--rc-pill-auth-text);
+}
+
+.rc-pill-offline {
+  background: var(--rc-pill-offline-bg);
+  border-color: var(--rc-pill-offline-border);
+  color: var(--rc-pill-offline-text);
+}
+
+.rc-badge {
+  background: var(--rc-badge-bg);
+  border: 1px solid var(--rc-badge-border);
+  color: var(--rc-badge-text);
+}
+
+.rc-kbd-del {
+  background: var(--rc-kbd-del-bg);
+  color: var(--rc-kbd-del-text);
+}
+
+.rc-kbd-del:hover {
+  background: var(--rc-kbd-del-hover);
+}
+
+.rc-text-primary {
+  color: var(--rc-text-primary);
+}
+
+.rc-text-secondary {
+  color: var(--rc-text-secondary);
+}
+
+.rc-text-muted {
+  color: var(--rc-text-muted);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-remote-skin] *,
+  .rc-chassis,
+  .rc-emitter,
+  .rc-key {
+    transition-duration: 0.01ms !important;
+  }
+}

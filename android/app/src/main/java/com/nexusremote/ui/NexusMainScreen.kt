@@ -1125,7 +1125,18 @@ private fun InlineRemoteDrawers(
     onOpenDiscovery: () -> Unit,
     onOpenSavedTvs: () -> Unit
 ) {
-    // Expandable Inline Universal TV Brand Selector (mirrors RemoteControl.tsx lines 199-252)
+    // Expandable Inline Universal TV Brand Selector (mirrors RemoteControl.tsx)
+    var brandQuery by remember { mutableStateOf("") }
+    val filteredBrands = remember(brands, brandQuery) {
+        val q = brandQuery.trim().lowercase()
+        if (q.isEmpty()) brands
+        else brands.filter {
+            it.name.lowercase().contains(q) ||
+                it.modelSeries.lowercase().contains(q) ||
+                it.protocol.name.lowercase().contains(q)
+        }
+    }
+
     AnimatedVisibility(visible = showBrandSelector) {
         Surface(
             shape = RoundedCornerShape(16.dp),
@@ -1144,73 +1155,116 @@ private fun InlineRemoteDrawers(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Default.Tv, contentDescription = null, tint = Color(0xFF38BDF8), modifier = Modifier.size(16.dp))
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text("Universal TV Remote Setup", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = textPrimary)
+                        Text("Universal TV Database (${brands.size})", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = textPrimary)
                     }
-                    IconButton(onClick = onCloseBrandSelector, modifier = Modifier.size(22.dp)) {
+                    IconButton(
+                        onClick = {
+                            brandQuery = ""
+                            onCloseBrandSelector()
+                        },
+                        modifier = Modifier.size(22.dp)
+                    ) {
                         Icon(Icons.Default.Close, contentDescription = "Close", tint = textSecondary, modifier = Modifier.size(14.dp))
                     }
                 }
                 Text(
-                    text = "Select your TV brand & series to calibrate IR pulse frequency and waveform protocol:",
+                    text = "Verified profiles sourced from probonopd/irdb & Flipper-IRDB:",
                     fontSize = 10.sp,
                     color = textSecondary,
-                    modifier = Modifier.padding(top = 2.dp, bottom = 8.dp)
+                    modifier = Modifier.padding(top = 2.dp, bottom = 6.dp)
+                )
+
+                OutlinedTextField(
+                    value = brandQuery,
+                    onValueChange = { brandQuery = it },
+                    placeholder = { Text("Filter brand, model, or protocol...", fontSize = 11.sp) },
+                    leadingIcon = {
+                        Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(15.dp), tint = textSecondary)
+                    },
+                    trailingIcon = {
+                        if (brandQuery.isNotEmpty()) {
+                            IconButton(onClick = { brandQuery = "" }, modifier = Modifier.size(20.dp)) {
+                                Icon(Icons.Default.Close, contentDescription = "Clear", modifier = Modifier.size(13.dp), tint = textSecondary)
+                            }
+                        }
+                    },
+                    singleLine = true,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = textPrimary,
+                        unfocusedTextColor = textPrimary
+                    ),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 8.dp)
                 )
 
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .heightIn(max = 260.dp)
+                        .heightIn(max = 280.dp)
                         .verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    brands.forEach { brand ->
-                        val isSelected = brand.id == selectedBrand.id
-                        Surface(
-                            onClick = { onSelectBrand(brand) },
-                            shape = RoundedCornerShape(12.dp),
-                            color = if (isSelected) Color(0xFF082F49) else Color(0xFF1E293B).copy(alpha = 0.7f),
-                            border = BorderStroke(1.dp, if (isSelected) Color(0xFF0EA5E9) else Color(0xFF334155))
-                        ) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 10.dp, vertical = 8.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
+                    if (filteredBrands.isEmpty()) {
+                        Text(
+                            text = "No TV models matching \"$brandQuery\"",
+                            fontSize = 11.sp,
+                            color = textSecondary,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 16.dp)
+                        )
+                    } else {
+                        filteredBrands.forEach { brand ->
+                            val isSelected = brand.id == selectedBrand.id
+                            Surface(
+                                onClick = {
+                                    brandQuery = ""
+                                    onSelectBrand(brand)
+                                },
+                                shape = RoundedCornerShape(12.dp),
+                                color = if (isSelected) Color(0xFF082F49) else Color(0xFF1E293B).copy(alpha = 0.7f),
+                                border = BorderStroke(1.dp, if (isSelected) Color(0xFF0EA5E9) else Color(0xFF334155))
                             ) {
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                                        Text(brand.name, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White)
-                                        Surface(shape = RoundedCornerShape(4.dp), color = Color(0xFF0F172A), border = BorderStroke(1.dp, Color(0xFF334155))) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 10.dp, vertical = 8.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                            Text(brand.name, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White)
                                             Text(
-                                                "${brand.carrierFrequencyHz / 1000} kHz",
+                                                "${brand.carrierFrequencyHz / 1000} kHz · ${brand.protocol.name}",
                                                 fontSize = 9.sp,
                                                 fontFamily = FontFamily.Monospace,
-                                                color = Color(0xFF7DD3FC),
-                                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                                                color = Color(0xFF7DD3FC)
                                             )
                                         }
-                                        Surface(shape = RoundedCornerShape(4.dp), color = Color(0xFF2E1065).copy(alpha = 0.7f)) {
+                                        Text(
+                                            brand.modelSeries,
+                                            fontSize = 10.sp,
+                                            color = Color(0xFFCBD5E1),
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                        if (brand.source.isNotBlank()) {
                                             Text(
-                                                brand.protocol.name,
+                                                brand.source,
                                                 fontSize = 9.sp,
                                                 fontFamily = FontFamily.Monospace,
-                                                color = Color(0xFFD8B4FE),
-                                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                                                color = Color(0xFF94A3B8),
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
                                             )
                                         }
                                     }
-                                    Text(
-                                        brand.modelSeries,
-                                        fontSize = 10.sp,
-                                        color = Color(0xFF94A3B8),
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                }
-                                if (isSelected) {
-                                    Icon(Icons.Default.Check, contentDescription = "Selected", tint = Color(0xFF38BDF8), modifier = Modifier.size(16.dp))
+                                    if (isSelected) {
+                                        Icon(Icons.Default.Check, contentDescription = "Selected", tint = Color(0xFF38BDF8), modifier = Modifier.size(16.dp))
+                                    }
                                 }
                             }
                         }
@@ -2951,7 +3005,7 @@ fun DiscoveryScreen(
                         FilterChip(
                             selected = brand.id == selectedIrBrand.id,
                             onClick = { selectedIrBrand = brand },
-                            label = { Text("${brand.name.split(" ")[0]} (${brand.carrierFrequencyHz / 1000}k)", fontSize = 11.sp) }
+                            label = { Text("${brand.name} (${brand.carrierFrequencyHz / 1000}k)", fontSize = 11.sp) }
                         )
                     }
                 }
