@@ -17,6 +17,7 @@ class DevicePreferences(private val context: Context) {
 
     companion object {
         private val KEY_LAST_DEVICE_ID = stringPreferencesKey("last_connected_device_id")
+        private val KEY_SELECTED_IR_BRAND = stringPreferencesKey("selected_ir_brand_id")
         private val KEY_HAPTICS_ENABLED = booleanPreferencesKey("haptics_enabled")
         private val KEY_HOLD_TO_REPEAT = booleanPreferencesKey("hold_to_repeat_enabled")
         private val KEY_REPEAT_RATE_MS = intPreferencesKey("repeat_rate_ms")
@@ -24,6 +25,7 @@ class DevicePreferences(private val context: Context) {
     }
 
     val lastConnectedDeviceId: Flow<String?> = context.dataStore.data.map { it[KEY_LAST_DEVICE_ID] }
+    val selectedIrBrandId: Flow<String> = context.dataStore.data.map { it[KEY_SELECTED_IR_BRAND] ?: "samsung" }
     val isHapticsEnabled: Flow<Boolean> = context.dataStore.data.map { it[KEY_HAPTICS_ENABLED] ?: true }
     val isHoldToRepeatEnabled: Flow<Boolean> = context.dataStore.data.map { it[KEY_HOLD_TO_REPEAT] ?: true }
     val repeatRateMs: Flow<Int> = context.dataStore.data.map { it[KEY_REPEAT_RATE_MS] ?: 120 }
@@ -31,6 +33,10 @@ class DevicePreferences(private val context: Context) {
 
     suspend fun setLastConnectedDeviceId(id: String) {
         context.dataStore.edit { it[KEY_LAST_DEVICE_ID] = id }
+    }
+
+    suspend fun setSelectedIrBrandId(brandId: String) {
+        context.dataStore.edit { it[KEY_SELECTED_IR_BRAND] = brandId }
     }
 
     suspend fun setHapticsEnabled(enabled: Boolean) {

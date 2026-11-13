@@ -203,6 +203,57 @@ class DeviceManagementViewModel(
         }
     }
 
+    fun connectAndSaveQuickIp(
+        hostIp: String,
+        protocol: ProtocolType,
+        onResolved: (SavedDevice) -> Unit
+    ) {
+        val cleanIp = hostIp.trim()
+        if (cleanIp.isBlank()) return
+        val portMap = mapOf(
+            ProtocolType.ADB_NETWORK to 5555,
+            ProtocolType.ANDROID_TV_REMOTE to 6467,
+            ProtocolType.ROKU_ECP to 8060,
+            ProtocolType.SAMSUNG_TIZEN to 8002,
+            ProtocolType.LG_WEBOS to 3001,
+            ProtocolType.SONY_BRAVIA to 80,
+            ProtocolType.HISENSE_VIDAA to 5000,
+            ProtocolType.PANASONIC_VIERA to 55000
+        )
+        val defaultPort = portMap[protocol] ?: 5555
+        val brandName = when (protocol) {
+            ProtocolType.SAMSUNG_TIZEN -> "Samsung"
+            ProtocolType.LG_WEBOS -> "LG Electronics"
+            ProtocolType.ROKU_ECP -> "Roku"
+            ProtocolType.SONY_BRAVIA -> "Sony"
+            ProtocolType.HISENSE_VIDAA -> "Hisense"
+            ProtocolType.PANASONIC_VIERA -> "Panasonic"
+            ProtocolType.ANDROID_TV_REMOTE -> "Google TV"
+            else -> "Fire TV / Android TV"
+        }
+
+        viewModelScope.launch(Dispatchers.IO) {
+            val existing = deviceDao.getDeviceByIp(cleanIp)
+            val device = existing ?: SavedDevice(
+                id = "${protocol.name.lowercase()}_${cleanIp.replace('.', '_')}",
+                name = "$brandName ($cleanIp)",
+                brand = brandName,
+                modelName = protocol.name.replace('_', ' '),
+                hostIp = cleanIp,
+                port = defaultPort,
+                protocolType = protocol,
+                room = "Living Room",
+                lastConnectedTimestamp = System.currentTimeMillis(),
+                onlineStatus = DeviceOnlineStatus.CHECKING
+            )
+            deviceDao.insertDevice(device)
+            devicePreferences.setLastConnectedDeviceId(device.id)
+            withContext(Dispatchers.Main) {
+                onResolved(device)
+            }
+        }
+    }
+
     /**
      * Smart Reconnect: Attempts cached IP first; only relocates if the IP has changed.
      * For CONSUMER_IR devices, verifies local hardware emitter directly without network scanning.
@@ -233,7 +284,6 @@ class DeviceManagementViewModel(
                     onResolved(updatedDevice)
                 }
             } else {
-                // Still allow opening the remote screen so user can inspect status, use IR companion, or edit IP
                 deviceDao.updateOnlineStatus(device.id, DeviceOnlineStatus.OFFLINE)
                 val offlineDevice = device.copy(onlineStatus = DeviceOnlineStatus.OFFLINE)
                 _activeMessage.value = "${device.name} appears offline. Opened remote with IR & reconnect options."
@@ -293,8 +343,11 @@ class RemoteControlViewModel(
     private val _selectedIrBrand = MutableStateFlow(ConsumerIrAdapter.UNIVERSAL_BRANDS.first())
     val selectedIrBrand: StateFlow<UniversalIrBrand> = _selectedIrBrand.asStateFlow()
 
-    private val _isUniversalIrMode = MutableStateFlow(false)
+    private val _isUniversalIrMode = MutableStateFlow(true)
     val isUniversalIrMode: StateFlow<Boolean> = _isUniversalIrMode.asStateFlow()
+
+    private val _hasNetworkTarget = MutableStateFlow(false)
+    val hasNetworkTarget: StateFlow<Boolean> = _hasNetworkTarget.asStateFlow()
 
     private val _lastIrPulseTimestamp = MutableStateFlow(0L)
     val lastIrPulseTimestamp: StateFlow<Long> = _lastIrPulseTimestamp.asStateFlow()
@@ -307,7 +360,7 @@ class RemoteControlViewModel(
     private var connectionObserverJob: Job? = null
     private var repeatJob: Job? = null
 
-    private val _connectionStatus = MutableStateFlow(DeviceOnlineStatus.CHECKING)
+    private val _connectionStatus = MutableStateFlow(DeviceOnlineStatus.OFFLINE)
     val connectionStatus: StateFlow<DeviceOnlineStatus> = _connectionStatus.asStateFlow()
 
     private val _capabilities = MutableStateFlow<Set<DeviceCapability>>(emptySet())
@@ -341,6 +394,17 @@ class RemoteControlViewModel(
     val isHoldToRepeatEnabled: StateFlow<Boolean> = _isHoldToRepeatEnabled.asStateFlow()
 
     init {
+        bindUniversalIr(_selectedIrBrand.value)
+
+        viewModelScope.launch {
+            devicePreferences.selectedIrBrandId.collect { brandId ->
+                val resolved = ConsumerIrAdapter.resolveBrand(brandId)
+                if (resolved.id != _selectedIrBrand.value.id) {
+                    _selectedIrBrand.value = resolved
+                    irController?.setActiveBrand(resolved)
+                }
+            }
+        }
         viewModelScope.launch {
             devicePreferences.isHapticsEnabled.collect { _isHapticsEnabled.value = it }
         }
@@ -353,7 +417,7 @@ class RemoteControlViewModel(
         return if (_isUniversalIrMode.value) irController else networkController
     }
 
-    fun bindDevice(device: SavedDevice) {
+    fun bindDevice(device: SavedDevice, keepCurrentMode: Boolean = false) {
         _hasIrHardware.value = ConsumerIrAdapter.isHardwareAvailable(context)
         _activeDevice.value = device
         _installedApps.value = emptyList()
@@ -362,17 +426,20 @@ class RemoteControlViewModel(
         val matchedBrand = ConsumerIrAdapter.resolveBrand(device.brand)
         _selectedIrBrand.value = matchedBrand
 
-        // Always keep an IR adapter ready so user can seamlessly toggle between Network and Universal IR
         val irProfile = device.copy(protocolType = ProtocolType.CONSUMER_IR, brand = matchedBrand.name)
         irController = ConsumerIrAdapter(irProfile, context).also { it.setActiveBrand(matchedBrand) }
 
         if (device.protocolType == ProtocolType.CONSUMER_IR) {
             networkController = null
+            _hasNetworkTarget.value = false
             _isUniversalIrMode.value = true
             refreshActiveControllerState(connectNow = true)
         } else {
             networkController = protocolRegistry.createController(device)
-            _isUniversalIrMode.value = false
+            _hasNetworkTarget.value = true
+            if (!keepCurrentMode) {
+                _isUniversalIrMode.value = false
+            }
             refreshActiveControllerState(connectNow = true)
         }
     }
@@ -391,31 +458,55 @@ class RemoteControlViewModel(
             name = "${brand.name} Universal IR",
             brand = brand.name,
             modelName = brand.modelSeries,
-            hostIp = "IR Blaster",
-            port = 0,
+            hostIp = "Set IP",
+            port = 5555,
             protocolType = ProtocolType.CONSUMER_IR,
             room = "Universal Remote",
             onlineStatus = if (_hasIrHardware.value) DeviceOnlineStatus.ONLINE else DeviceOnlineStatus.OFFLINE
         )
         _activeDevice.value = virtualIrDevice
         networkController = null
+        _hasNetworkTarget.value = false
         irController = ConsumerIrAdapter(virtualIrDevice, context).also { it.setActiveBrand(brand) }
         _isUniversalIrMode.value = true
         refreshActiveControllerState(connectNow = true)
     }
 
     fun switchRemoteMode(useUniversalIr: Boolean) {
-        if (!useUniversalIr && networkController == null) {
-            _feedback.value = "Pair a Wi-Fi TV on the Home screen to use Network mode"
-            return
-        }
         _isUniversalIrMode.value = useUniversalIr
-        refreshActiveControllerState(connectNow = !useUniversalIr && _connectionStatus.value != DeviceOnlineStatus.ONLINE)
+        if (useUniversalIr) {
+            refreshActiveControllerState(connectNow = true)
+        } else if (networkController != null) {
+            refreshActiveControllerState(connectNow = _connectionStatus.value != DeviceOnlineStatus.ONLINE)
+        } else {
+            // Show standard Wi-Fi Smart TV capability layout while awaiting IP/pairing
+            _connectionStatus.value = DeviceOnlineStatus.OFFLINE
+            _capabilities.value = setOf(
+                DeviceCapability.DPAD_NAVIGATION,
+                DeviceCapability.CENTER_OK,
+                DeviceCapability.BACK,
+                DeviceCapability.HOME,
+                DeviceCapability.MENU,
+                DeviceCapability.KEYBOARD_TEXT_INJECTION,
+                DeviceCapability.REAL_APP_LAUNCH
+            )
+        }
+    }
+
+    fun disconnectNetwork() {
+        viewModelScope.launch(Dispatchers.IO) {
+            networkController?.disconnect()
+            _connectionStatus.value = DeviceOnlineStatus.OFFLINE
+            _feedback.value = "Disconnected from network TV"
+        }
     }
 
     fun selectIrBrand(brand: UniversalIrBrand) {
         _selectedIrBrand.value = brand
         irController?.setActiveBrand(brand)
+        viewModelScope.launch(Dispatchers.IO) {
+            devicePreferences.setSelectedIrBrandId(brand.id)
+        }
         if (_activeDevice.value?.protocolType == ProtocolType.CONSUMER_IR) {
             _activeDevice.value = _activeDevice.value?.copy(
                 name = "${brand.name} Universal IR",
@@ -423,7 +514,7 @@ class RemoteControlViewModel(
                 modelName = brand.modelSeries
             )
         }
-        _feedback.value = "IR Profile: ${brand.name} (${brand.carrierFrequencyHz / 1000} kHz ${brand.protocol.name})"
+        _feedback.value = "TV Model: ${brand.name} (${brand.carrierFrequencyHz / 1000} kHz ${brand.protocol.name})"
     }
 
     private fun refreshActiveControllerState(connectNow: Boolean) {
@@ -467,7 +558,11 @@ class RemoteControlViewModel(
 
     fun sendCommand(command: RemoteCommand) {
         triggerHaptic()
-        val controller = currentController() ?: return
+        val controller = currentController()
+        if (controller == null) {
+            _feedback.value = "Tap 'Set IP' above or Scan Wi-Fi to connect a TV"
+            return
+        }
         if (_isUniversalIrMode.value) {
             _lastIrPulseTimestamp.value = System.currentTimeMillis()
         }
@@ -507,7 +602,11 @@ class RemoteControlViewModel(
 
     fun launchApp(app: InstalledTvApp) {
         triggerHaptic()
-        val controller = currentController() ?: return
+        val controller = currentController()
+        if (controller == null) {
+            _feedback.value = "Connect to your Smart TV over Wi-Fi to launch ${app.name}"
+            return
+        }
         viewModelScope.launch(Dispatchers.IO) {
             val ok = controller.launchApp(app.packageNameOrAppId)
             _feedback.value = if (ok) "Launching ${app.name}" else "Failed launching ${app.name}"
