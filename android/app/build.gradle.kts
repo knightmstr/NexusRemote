@@ -31,7 +31,8 @@ android {
                 storeFile = file(signingStoreFile)
                 storePassword = System.getenv("SIGNING_STORE_PASSWORD")
                 keyAlias = System.getenv("SIGNING_KEY_ALIAS")
-                keyPassword = System.getenv("SIGNING_KEY_PASSWORD")
+                // PKCS12 keystores use one password for the store and the key.
+                keyPassword = System.getenv("SIGNING_STORE_PASSWORD")
             }
         }
     }
