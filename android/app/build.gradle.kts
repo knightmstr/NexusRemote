@@ -8,6 +8,10 @@ plugins {
 val ciVersionCode = project.findProperty("versionCode")?.toString()?.toIntOrNull() ?: 2
 val ciVersionName = project.findProperty("versionName")?.toString()?.takeIf { it.isNotBlank() } ?: "2.0.0"
 
+// Permanent signing key. CI provides it via env vars (from GitHub secrets);
+// locally, set the same env vars or leave them unset to use the default debug key.
+val signingStoreFile = System.getenv("SIGNING_STORE_FILE")?.takeIf { it.isNotBlank() && file(it).exists() }
+
 android {
     namespace = "com.nexusremote"
     compileSdk = 35
@@ -21,8 +25,27 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    signingConfigs {
+        if (signingStoreFile != null) {
+            create("nexus") {
+                storeFile = file(signingStoreFile)
+                storePassword = System.getenv("SIGNING_STORE_PASSWORD")
+                keyAlias = System.getenv("SIGNING_KEY_ALIAS")
+                keyPassword = System.getenv("SIGNING_KEY_PASSWORD")
+            }
+        }
+    }
+
     buildTypes {
+        debug {
+            if (signingStoreFile != null) {
+                signingConfig = signingConfigs.getByName("nexus")
+            }
+        }
         release {
+            if (signingStoreFile != null) {
+                signingConfig = signingConfigs.getByName("nexus")
+            }
             isMinifyEnabled = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
